@@ -13,7 +13,7 @@
 #   AGENT_DEV_BUILD=1 ./bin/agent-dev up   # uses compose.build.yml + Dockerfile
 services:
   agent-dev:
-    image: ${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}
+    image: ${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
     container_name: agent-dev
     restart: unless-stopped
     init: true

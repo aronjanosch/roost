@@ -8,5 +8,5 @@ services:
       context: .
       dockerfile: Dockerfile.user
       args:
-        AGENT_DEV_IMAGE: ${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}
+        AGENT_DEV_IMAGE: ${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
         EXTRA_PACKAGES: ${EXTRA_PACKAGES:-}

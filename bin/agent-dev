@@ -41,7 +41,7 @@ load_env() {
   REMOTE_DIR="${REMOTE_DIR:-/opt/agent-dev}"
   AGENT_DEV_HOME="${AGENT_DEV_HOME:-/srv/agent-dev}"
   AGENT_DEV_SSH="${AGENT_DEV_SSH:-/srv/agent-dev-ssh}"
-  AGENT_DEV_IMAGE="${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}"
+  AGENT_DEV_IMAGE="${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}"
   EXTRA_PACKAGES="${EXTRA_PACKAGES:-}"
   PUID="${PUID:-1000}"; PGID="${PGID:-1000}"
 }
@@ -117,7 +117,7 @@ SSH_HOST=$ssh_host
 REMOTE_DIR=$remote_dir
 AGENT_DEV_HOME=$home
 AGENT_DEV_SSH=$sshdir
-AGENT_DEV_IMAGE=${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}
+AGENT_DEV_IMAGE=${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
 PUID=$uid
 PGID=$gid
 TZ=$tz
