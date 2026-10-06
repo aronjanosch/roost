@@ -42,7 +42,7 @@ chown -R "$PUID:$PGID" "$AGENT_HOME" 2>/dev/null || true
 # Global agent instructions, managed by the image: overwritten on every start.
 for f in .claude/CLAUDE.md .codex/AGENTS.md .config/opencode/AGENTS.md; do
   mkdir -p "$AGENT_HOME/$(dirname "$f")"
-  cp /etc/agent-dev/AGENTS.md "$AGENT_HOME/$f"
+  cp /etc/roost/AGENTS.md "$AGENT_HOME/$f"
 done
 chown -R "$PUID:$PGID" "$AGENT_HOME/.claude" "$AGENT_HOME/.codex" "$AGENT_HOME/.config" 2>/dev/null || true
 
@@ -92,7 +92,7 @@ bootstrap() {
 
   # Pre-accept Claude's trust dialog per repo (it has no wildcard, so every
   # ~/projects/<name> gets an entry; repos cloned later are picked up on the
-  # next container start or `agent-dev trust`).
+  # next container start or `roost trust`).
   if [ "$TRUST_PROJECTS" = "1" ]; then
     run bash -c 'dirs=("$HOME/projects"); for d in "$HOME"/projects/*/; do [ -d "$d" ] && dirs+=("${d%/}"); done
       printf "%s\n" "${dirs[@]}" | jq -R . | jq -s . > "$HOME/.trust.json"
@@ -101,7 +101,7 @@ bootstrap() {
       || echo "WARN: trust pre-accept failed"
   fi
 
-  echo "agent-dev bootstrap done"
+  echo "roost bootstrap done"
 }
 
 bootstrap &

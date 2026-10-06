@@ -1,8 +1,8 @@
 # End-user extension layer: adds apt packages on top of the published image.
 # Kept tiny so a new base image only re-runs this one layer. Select with
-# `./bin/agent-dev up` when EXTRA_PACKAGES is set in .env.
-ARG AGENT_DEV_IMAGE=ghcr.io/aronjanosch/agent-dev:latest
-FROM ${AGENT_DEV_IMAGE}
+# `./bin/roost up` when EXTRA_PACKAGES is set in .env.
+ARG ROOST_IMAGE=ghcr.io/aronjanosch/roost:latest
+FROM ${ROOST_IMAGE}
 
 ARG EXTRA_PACKAGES=""
 RUN apt-get update \

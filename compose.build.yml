@@ -1,8 +1,8 @@
 # Overlay: build the base image locally from Dockerfile (maintainers / dev only).
-#   AGENT_DEV_BUILD=1 ./bin/agent-dev up
+#   ROOST_BUILD=1 ./bin/roost up
 services:
-  agent-dev:
-    image: agent-dev:dev
+  roost:
+    image: roost:dev
     build:
       context: .
       dockerfile: Dockerfile

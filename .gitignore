@@ -2,4 +2,4 @@
 ssh/
 *.tgz
 *.log
-.agent-dev-state/
+.roost-state/

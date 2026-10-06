@@ -31,13 +31,13 @@ RUN (userdel -r ubuntu 2>/dev/null; groupdel ubuntu 2>/dev/null; true) \
     && groupadd -g 1000 agent \
     && useradd -u 1000 -g agent -m -s /bin/bash -p '*' agent
 
-COPY agent-instructions.md /etc/agent-dev/AGENTS.md
+COPY agent-instructions.md /etc/roost/AGENTS.md
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY sshd_config /etc/agent-dev/sshd_config
+COPY sshd_config /etc/roost/sshd_config
 
 # PATH for login shells (docker exec bash -l) + aliases for interactive ones.
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-    && echo 'export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"' > /etc/profile.d/agent-dev.sh \
+    && echo 'export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"' > /etc/profile.d/roost.sh \
     && printf '%s\n' \
       "eval \"\$(/usr/local/bin/mise activate bash)\"" \
       "alias a='claude'" \

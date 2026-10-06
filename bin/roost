@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# agent-dev — host-side control for a long-running, headless agent container.
+# roost — host-side control for a long-running, headless agent container.
 #
-#   agent-dev init            interactive setup wizard (writes .env, SSH identity)
-#   agent-dev up              pull/start the container
-#   agent-dev update          pull a newer image and recreate (home survives)
-#   agent-dev migrate         copy host config/credentials into the box
-#   agent-dev ssh-config      print the SSH block for ~/.ssh/config
-#   agent-dev machine-add     register the box as a herdr machine
-#   agent-dev gap <name>      classify a missing tool: mise vs apt
-#   agent-dev doctor          health checks (incl. herdr protocol match)
-#   agent-dev trust           pre-accept Claude trust for ~/projects/*
-#   agent-dev shell [cmd...]  run a command (or a shell) inside the box
-#   agent-dev logs            follow container logs
+#   roost init            interactive setup wizard (writes .env, SSH identity)
+#   roost up              pull/start the container
+#   roost update          pull a newer image and recreate (home survives)
+#   roost migrate         copy host config/credentials into the box
+#   roost ssh-config      print the SSH block for ~/.ssh/config
+#   roost machine-add     register the box as a herdr machine
+#   roost gap <name>      classify a missing tool: mise vs apt
+#   roost doctor          health checks (incl. herdr protocol match)
+#   roost trust           pre-accept Claude trust for ~/projects/*
+#   roost shell [cmd...]  run a command (or a shell) inside the box
+#   roost logs            follow container logs
 #
 # Nothing here is specific to a particular host: point SSH_HOST at any machine
 # that can run `docker`, or leave it blank for a local daemon.
@@ -20,8 +20,8 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 cd "$REPO"
 
-CONTAINER=agent-dev
-SSH_ALIAS=agent-dev
+CONTAINER=roost
+SSH_ALIAS=roost
 
 # ---------------------------------------------------------------------------
 # output
@@ -38,10 +38,10 @@ load_env() {
   set -a; # shellcheck disable=SC1091
   . "$REPO/.env"; set +a
   SSH_HOST="${SSH_HOST:-}"
-  REMOTE_DIR="${REMOTE_DIR:-/opt/agent-dev}"
-  AGENT_DEV_HOME="${AGENT_DEV_HOME:-/srv/agent-dev}"
-  AGENT_DEV_SSH="${AGENT_DEV_SSH:-/srv/agent-dev-ssh}"
-  AGENT_DEV_IMAGE="${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}"
+  REMOTE_DIR="${REMOTE_DIR:-/opt/roost}"
+  ROOST_HOME="${ROOST_HOME:-/srv/roost}"
+  ROOST_SSH="${ROOST_SSH:-/srv/roost-ssh}"
+  ROOST_IMAGE="${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}"
   EXTRA_PACKAGES="${EXTRA_PACKAGES:-}"
   PUID="${PUID:-1000}"; PGID="${PGID:-1000}"
 }
@@ -49,7 +49,7 @@ load_env() {
 # Compose file list: base + overlay chosen by mode.
 compose_files() {
   local files=(-f compose.yml)
-  if [ -n "${AGENT_DEV_BUILD:-}" ]; then
+  if [ -n "${ROOST_BUILD:-}" ]; then
     files+=(-f compose.build.yml)
   elif [ -n "${EXTRA_PACKAGES:-}" ]; then
     files+=(-f compose.user.yml)
@@ -85,7 +85,7 @@ ask() {
 
 cmd_init() {
   [ -f "$REPO/.env" ] && ! confirm ".env exists — overwrite it?" n && die "aborted"
-  step "agent-dev setup wizard"
+  step "roost setup wizard"
   say  "Run this on the machine whose configs you want to migrate (your laptop)."
   say  "Answers build .env and the container's SSH identity."
 
@@ -94,9 +94,9 @@ cmd_init() {
   user="$(ask 'Container username (for your SSH config)' "$(id -un)")"
   uid="$(ask 'PUID that should own the home volume' "$(id -u)")"
   gid="$(ask 'PGID' "$(id -g)")"
-  home="$(ask 'Persistent home path' '/srv/agent-dev')"
+  home="$(ask 'Persistent home path' '/srv/roost')"
   sshdir="$(ask 'SSH identity dir (root-owned)' "${home}-ssh")"
-  remote_dir="$(ask 'Durable repo-sync dir on the docker host' '/opt/agent-dev')"
+  remote_dir="$(ask 'Durable repo-sync dir on the docker host' '/opt/roost')"
   tz="$(ask 'Timezone' "$(cat /etc/timezone 2>/dev/null || echo UTC)")"
   local gitname gitemail
   gitname="$(ask 'Git user.name' "$(git config --global user.name 2>/dev/null || true)")"
@@ -115,9 +115,9 @@ cmd_init() {
   cat > "$REPO/.env" <<EOF
 SSH_HOST=$ssh_host
 REMOTE_DIR=$remote_dir
-AGENT_DEV_HOME=$home
-AGENT_DEV_SSH=$sshdir
-AGENT_DEV_IMAGE=${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
+ROOST_HOME=$home
+ROOST_SSH=$sshdir
+ROOST_IMAGE=${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}
 PUID=$uid
 PGID=$gid
 TZ=$tz
@@ -135,7 +135,7 @@ EOF
   # stash the container username in .env for ssh-config/machine-add
   printf 'AGENT_USER=%s\n' "$user" >> "$REPO/.env"
 
-  AGENT_DEV_HOME="$home" AGENT_DEV_SSH="$sshdir" cmd_setup_ssh
+  ROOST_HOME="$home" ROOST_SSH="$sshdir" cmd_setup_ssh
 
   say ""
   step "Next"
@@ -150,9 +150,9 @@ cmd_setup_ssh() {
   local host_cmd_local=true
   [ -n "${SSH_HOST:-}" ] && host_cmd_local=false
 
-  step "SSH identity in $AGENT_DEV_SSH (root-owned; the only login path)"
-  local key="$AGENT_DEV_SSH/ssh_host_ed25519_key"
-  local ak="$AGENT_DEV_SSH/authorized_keys"
+  step "SSH identity in $ROOST_SSH (root-owned; the only login path)"
+  local key="$ROOST_SSH/ssh_host_ed25519_key"
+  local ak="$ROOST_SSH/authorized_keys"
 
   # Collect a public key to authorise. Default: the user's own ~/.ssh/*.pub.
   local default_pub=""
@@ -177,9 +177,9 @@ REMOTE
 )
 
   if [ "$host_cmd_local" = true ]; then
-    bash -c "$script" _ "$AGENT_DEV_SSH" "$key"
+    bash -c "$script" _ "$ROOST_SSH" "$key"
   else
-    ssh "$SSH_HOST" "bash -s" _ "$AGENT_DEV_SSH" "$key" <<<"$script"
+    ssh "$SSH_HOST" "bash -s" _ "$ROOST_SSH" "$key" <<<"$script"
   fi
   ok "host key created"
 
@@ -196,7 +196,7 @@ REMOTE
     if [ "$host_cmd_local" = true ]; then chmod 0644 "$ak"; else ssh "$SSH_HOST" "chmod 0644 '$ak'"; fi
     ok "authorized key installed from $key_src"
   else
-    warn "no public key installed — append lines to $AGENT_DEV_SSH/authorized_keys before machine-add"
+    warn "no public key installed — append lines to $ROOST_SSH/authorized_keys before machine-add"
   fi
 }
 
@@ -207,10 +207,10 @@ cmd_ssh_config() {
   cat <<EOF
 # --- add to ~/.ssh/config (or a file under ~/.ssh/config.d/) ---
 Host $SSH_ALIAS
-  HostName agent-dev
+  HostName roost
   User $user
   RequestTTY auto
-  ProxyCommand ${jump:+$jump }docker exec -i -u root $CONTAINER /usr/sbin/sshd -i -e -f /etc/agent-dev/sshd_config
+  ProxyCommand ${jump:+$jump }docker exec -i -u root $CONTAINER /usr/sbin/sshd -i -e -f /etc/roost/sshd_config
 # ---------------------------------------------------------
 EOF
 }
@@ -259,7 +259,7 @@ run_compose() {
 }
 
 deploy() {
-  if [ -n "${AGENT_DEV_BUILD:-}" ]; then
+  if [ -n "${ROOST_BUILD:-}" ]; then
     step "building base image locally (compose.build.yml)"
     run_compose up -d --build
   elif [ -n "${EXTRA_PACKAGES:-}" ]; then
@@ -267,7 +267,7 @@ deploy() {
     run_compose build --pull
     run_compose up -d
   else
-    step "pulling ${AGENT_DEV_IMAGE}"
+    step "pulling ${ROOST_IMAGE}"
     run_compose pull
     run_compose up -d
   fi
@@ -408,9 +408,9 @@ cmd_gap() {
 
 cmd_doctor() {
   load_env
-  step "agent-dev doctor"
+  step "roost doctor"
   host_docker inspect "$CONTAINER" >/dev/null 2>&1 && ok "container running" || { warn "container not running"; return 0; }
-  dev_root sshd -t -f /etc/agent-dev/sshd_config >/dev/null 2>&1 && ok "sshd config valid" || warn "sshd config invalid"
+  dev_root sshd -t -f /etc/roost/sshd_config >/dev/null 2>&1 && ok "sshd config valid" || warn "sshd config invalid"
   dev_agent bash -lc 'command -v herdr >/dev/null' && ok "herdr present" || warn "herdr missing (bootstrap still running? check logs)"
   # --machine needs compatible herdr protocols on both ends.
   local lp bp

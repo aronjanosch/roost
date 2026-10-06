@@ -1,20 +1,20 @@
-# agent-dev — a long-running, headless dev box for coding agents (herdr +
+# roost — a long-running, headless dev box for coding agents (herdr +
 # claude/codex/opencode/... + headless Chromium). No inbound ports, no Docker
 # socket, no sudo. You reach it with `herdr machine add` over an SSH stream
-# carried by `docker exec` (see bin/agent-dev).
+# carried by `docker exec` (see bin/roost).
 #
 # Default mode PULLS the published image — updates are fast and reproducible.
-#   ./bin/agent-dev up        # pull + start
-#   ./bin/agent-dev update    # pull newer image + recreate (home survives)
+#   ./bin/roost up        # pull + start
+#   ./bin/roost update    # pull newer image + recreate (home survives)
 #
 # Extra apt packages use an overlay instead of a build arg:
-#   ./bin/agent-dev up        # auto-selects compose.user.yml when EXTRA_PACKAGES is set
+#   ./bin/roost up        # auto-selects compose.user.yml when EXTRA_PACKAGES is set
 # Maintainers building the base image:
-#   AGENT_DEV_BUILD=1 ./bin/agent-dev up   # uses compose.build.yml + Dockerfile
+#   ROOST_BUILD=1 ./bin/roost up   # uses compose.build.yml + Dockerfile
 services:
-  agent-dev:
-    image: ${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
-    container_name: agent-dev
+  roost:
+    image: ${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}
+    container_name: roost
     restart: unless-stopped
     init: true
     environment:
@@ -29,12 +29,12 @@ services:
       - TRUST_PROJECTS=${TRUST_PROJECTS:-1}
     volumes:
       # The only thing that must survive a recreate: logins, repos, mise tools.
-      - ${AGENT_DEV_HOME:-/srv/agent-dev}:/home/agent
+      - ${ROOST_HOME:-/srv/roost}:/home/agent
       # Root-owned host key (0600) and public authorized_keys (0644). Kept
       # outside the agent-writable home so agents cannot change the login set.
       - type: bind
-        source: ${AGENT_DEV_SSH:-/srv/agent-dev-ssh}
-        target: /etc/agent-dev/ssh
+        source: ${ROOST_SSH:-/srv/roost-ssh}
+        target: /etc/roost/ssh
         read_only: true
         bind:
           create_host_path: false

@@ -1,12 +1,12 @@
 # Overlay: end-user apt packages on top of the published image.
-# Selected automatically by `./bin/agent-dev up` when EXTRA_PACKAGES is set.
+# Selected automatically by `./bin/roost up` when EXTRA_PACKAGES is set.
 #   docker compose -f compose.yml -f compose.user.yml up -d --build
 services:
-  agent-dev:
-    image: agent-dev:custom
+  roost:
+    image: roost:custom
     build:
       context: .
       dockerfile: Dockerfile.user
       args:
-        AGENT_DEV_IMAGE: ${AGENT_DEV_IMAGE:-ghcr.io/aronjanosch/agent-dev:latest}
+        ROOST_IMAGE: ${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}
         EXTRA_PACKAGES: ${EXTRA_PACKAGES:-}

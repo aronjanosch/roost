@@ -1,7 +1,7 @@
 # Invoked on demand with `docker exec -i -u root ... sshd -i`; no TCP listener.
 # Dedicated host key and allowed public keys are supplied by a read-only mount.
-HostKey /etc/agent-dev/ssh/ssh_host_ed25519_key
-AuthorizedKeysFile /etc/agent-dev/ssh/authorized_keys
+HostKey /etc/roost/ssh/ssh_host_ed25519_key
+AuthorizedKeysFile /etc/roost/ssh/authorized_keys
 AllowUsers agent
 PermitRootLogin no
 PubkeyAuthentication yes

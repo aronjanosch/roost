@@ -1,4 +1,4 @@
-# agent-dev
+# roost
 
 **A long-running, headless dev box for coding agents.** Run Claude Code, Codex,
 opencode and friends in one persistent container on a NAS or VM, drive them from
@@ -7,7 +7,7 @@ sleeps.
 
 Reached with `herdr machine add`, not `ssh somewhere`: the container has **no
 inbound ports**, no sudo, and no Docker socket. SSH rides an on-demand `docker
-exec` stream, so nothing is exposed to the network. Plain `ssh agent-dev` still
+exec` stream, so nothing is exposed to the network. Plain `ssh roost` still
 works too — both paths use the same connection.
 
 ```
@@ -36,15 +36,15 @@ works too — both paths use the same connection.
 > your configs live where you do.
 
 ```bash
-git clone <this-repo> agent-dev && cd agent-dev
+git clone https://github.com/aronjanosch/roost && cd roost
 
-./bin/agent-dev init        # wizard → writes .env, creates the SSH identity
-./bin/agent-dev up          # build + start (first boot installs tools, ~minutes)
-./bin/agent-dev logs        # wait for "agent-dev bootstrap done"
-./bin/agent-dev ssh-config  # add the printed block to ~/.ssh/config
-./bin/agent-dev machine-add # register with herdr
+./bin/roost init        # wizard → writes .env, creates the SSH identity
+./bin/roost up          # build + start (first boot installs tools, ~minutes)
+./bin/roost logs        # wait for "roost bootstrap done"
+./bin/roost ssh-config  # add the printed block to ~/.ssh/config
+./bin/roost machine-add # register with herdr
 
-./bin/agent-dev shell       # then: gh auth login && gh auth setup-git
+./bin/roost shell       # then: gh auth login && gh auth setup-git
 ```
 
 Prudentials on the host: `docker` (or an `ssh` target that can run docker),
@@ -59,14 +59,14 @@ without configuration, and `migrate --repos` puts checkouts there.
 Because the container is the security boundary (no sudo, no Docker socket, no
 inbound ports), the entrypoint pre-accepts Claude's folder-trust dialog for
 `~/projects` and every directory below it, so sessions don't block on startup.
-Repos cloned later are covered after a restart or `agent-dev trust`. Set
+Repos cloned later are covered after a restart or `roost trust`. Set
 `TRUST_PROJECTS=0` in `.env` to keep the dialog. `rsync` is in the image for
 tools that expect it.
 
 ## herdr versions
 
 `herdr machine add` needs compatible protocol versions on laptop and box. herdr
-is installed unpinned via mise, so `agent-dev doctor` compares `herdr status`
+is installed unpinned via mise, so `roost doctor` compares `herdr status`
 protocols on both sides. If they differ, run `mise up herdr` on both, or pin it
 with `TOOLS="herdr@<version> …"` in `.env`.
 
@@ -76,8 +76,8 @@ Run `migrate` **on your laptop**, not on the NAS: git-over-HTTPS works out of th
 box, so copy your `gh` token and you are done — no per-environment SSH key.
 
 ```bash
-./bin/agent-dev migrate            # interactive
-./bin/agent-dev migrate --all      # git, ssh cfg, gh/glab, agent auth, dotfiles, repos
+./bin/roost migrate            # interactive
+./bin/roost migrate --all      # git, ssh cfg, gh/glab, agent auth, dotfiles, repos
 ```
 
 `~/.claude.json` is not copied wholesale: it holds host-specific project history
@@ -99,14 +99,14 @@ refuses to copy `id_*`, `*.pem`, `*.key`.
 ## Adding tools
 
 ```bash
-./bin/agent-dev gap <tool>                  # how should this be added?
+./bin/roost gap <tool>                  # how should this be added?
 
-./bin/agent-dev shell 'mise use -g lazygit' # live, persists in the home volume
+./bin/roost shell 'mise use -g lazygit' # live, persists in the home volume
 # apt/system libs: EXTRA_PACKAGES="ffmpeg …" in .env, then
-./bin/agent-dev up                          # builds a thin overlay on the base image
+./bin/roost up                          # builds a thin overlay on the base image
 ```
 
-Updates pull the published image (`./bin/agent-dev update`); your overlay and
+Updates pull the published image (`./bin/roost update`); your overlay and
 home volume survive. See [`docs/tools.md`](docs/tools.md) and
 [`docs/harnesses.md`](docs/harnesses.md).
 
@@ -119,7 +119,7 @@ home volume survive. See [`docs/tools.md`](docs/tools.md) and
 | `update` | pull a newer image + recreate (home survives) |
 | `migrate` | copy host config/credentials in |
 | `ssh-config` | print the `~/.ssh/config` block |
-| `machine-add` | `herdr machine add agent-dev` |
+| `machine-add` | `herdr machine add roost` |
 | `gap <name>` | classify a missing tool (mise vs apt) |
 | `doctor` | health checks, incl. herdr protocol match laptop ↔ box |
 | `trust` | pre-accept Claude's trust dialog for `~/projects/*` |
@@ -130,8 +130,8 @@ home volume survive. See [`docs/tools.md`](docs/tools.md) and
 ## Layout
 
 ```
-agent-dev/
-├── bin/agent-dev        host control (all commands)
+roost/
+├── bin/roost        host control (all commands)
 ├── compose.yml          service definition (pulls the published image)
 ├── compose.user.yml     overlay (auto-used when EXTRA_PACKAGES is set)
 ├── compose.build.yml    overlay to build the base image locally (maintainers)
@@ -157,12 +157,12 @@ agent-dev/
 ## Publish (maintainers)
 
 Normal users pull a prebuilt image; they never build the base.
-`.github/workflows/image.yml` builds and pushes `ghcr.io/<owner>/agent-dev` on
+`.github/workflows/image.yml` builds and pushes `ghcr.io/<owner>/roost` on
 every push to `main`, on `v*` tags, and weekly (to pick up a fresh Ubuntu base).
 Forking the repo gives you the same pipeline; point your fork at its own image
-with `AGENT_DEV_IMAGE=ghcr.io/<you>/agent-dev:latest` in `.env`.
+with `ROOST_IMAGE=ghcr.io/<you>/roost:latest` in `.env`.
 
-To build by hand instead: `docker build -t ghcr.io/<you>/agent-dev:latest .`
+To build by hand instead: `docker build -t ghcr.io/<you>/roost:latest .`
 
 The image is architecture-specific (the Dockerfile fetches the `linux-x64` mise
 binary), so it is amd64 only for now.
