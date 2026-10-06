@@ -1,0 +1,10 @@
+# End-user extension layer: adds apt packages on top of the published image.
+# Kept tiny so a new base image only re-runs this one layer. Select with
+# `./bin/agent-dev up` when EXTRA_PACKAGES is set in .env.
+ARG AGENT_DEV_IMAGE=ghcr.io/aron/agent-dev:latest
+FROM ${AGENT_DEV_IMAGE}
+
+ARG EXTRA_PACKAGES=""
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ${EXTRA_PACKAGES} \
+    && rm -rf /var/lib/apt/lists/*

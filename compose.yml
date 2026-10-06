@@ -1,0 +1,50 @@
+# agent-dev — a long-running, headless dev box for coding agents (herdr +
+# claude/codex/opencode/... + headless Chromium). No inbound ports, no Docker
+# socket, no sudo. You reach it with `herdr machine add` over an SSH stream
+# carried by `docker exec` (see bin/agent-dev).
+#
+# Default mode PULLS the published image — updates are fast and reproducible.
+#   ./bin/agent-dev up        # pull + start
+#   ./bin/agent-dev update    # pull newer image + recreate (home survives)
+#
+# Extra apt packages use an overlay instead of a build arg:
+#   ./bin/agent-dev up        # auto-selects compose.user.yml when EXTRA_PACKAGES is set
+# Maintainers building the base image:
+#   AGENT_DEV_BUILD=1 ./bin/agent-dev up   # uses compose.build.yml + Dockerfile
+services:
+  agent-dev:
+    image: ${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}
+    container_name: agent-dev
+    restart: unless-stopped
+    init: true
+    environment:
+      - TZ=${TZ:-UTC}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - GIT_USER_NAME=${GIT_USER_NAME:-}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL:-}
+      - HARNESSES=${HARNESSES:-claude codex opencode}
+      - TOOLS=${TOOLS:-herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp}
+      - CURSOR=${CURSOR:-0}
+      - TRUST_PROJECTS=${TRUST_PROJECTS:-1}
+    volumes:
+      # The only thing that must survive a recreate: logins, repos, mise tools.
+      - ${AGENT_DEV_HOME:-/srv/agent-dev}:/home/agent
+      # Root-owned host key (0600) and public authorized_keys (0644). Kept
+      # outside the agent-writable home so agents cannot change the login set.
+      - type: bind
+        source: ${AGENT_DEV_SSH:-/srv/agent-dev-ssh}
+        target: /etc/agent-dev/ssh
+        read_only: true
+        bind:
+          create_host_path: false
+    # Chromium/Electron crash with SIGBUS on the default 64 MB.
+    shm_size: "1gb"
+    # Keep a runaway agent from starving the rest of the host.
+    mem_limit: ${MEM_LIMIT:-6g}
+    pids_limit: ${PIDS_LIMIT:-2048}
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

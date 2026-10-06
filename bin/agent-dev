@@ -1,0 +1,465 @@
+#!/usr/bin/env bash
+# agent-dev — host-side control for a long-running, headless agent container.
+#
+#   agent-dev init            interactive setup wizard (writes .env, SSH identity)
+#   agent-dev up              pull/start the container
+#   agent-dev update          pull a newer image and recreate (home survives)
+#   agent-dev migrate         copy host config/credentials into the box
+#   agent-dev ssh-config      print the SSH block for ~/.ssh/config
+#   agent-dev machine-add     register the box as a herdr machine
+#   agent-dev gap <name>      classify a missing tool: mise vs apt
+#   agent-dev doctor          health checks (incl. herdr protocol match)
+#   agent-dev trust           pre-accept Claude trust for ~/projects/*
+#   agent-dev shell [cmd...]  run a command (or a shell) inside the box
+#   agent-dev logs            follow container logs
+#
+# Nothing here is specific to a particular host: point SSH_HOST at any machine
+# that can run `docker`, or leave it blank for a local daemon.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$REPO"
+
+CONTAINER=agent-dev
+SSH_ALIAS=agent-dev
+
+# ---------------------------------------------------------------------------
+# output
+# ---------------------------------------------------------------------------
+if [ -t 1 ]; then B=$'\033[1m'; D=$'\033[2m'; R=$'\033[0m'; G=$'\033[32m'; Y=$'\033[33m'; E=$'\033[31m'; else B=; D=; R=; G=; Y=; E=; fi
+say()  { printf '%s\n' "$*"; }
+step() { printf '%s==>%s %s\n' "$B" "$R" "$*"; }
+ok()   { printf '%s  ok%s %s\n' "$G" "$R" "$*"; }
+warn() { printf '%s  !!%s %s\n' "$Y" "$R" "$*"; }
+die()  { printf '%sERROR:%s %s\n' "$E" "$R" "$*" >&2; exit 1; }
+
+load_env() {
+  [ -f "$REPO/.env" ] || die "no .env yet — run: $0 init"
+  set -a; # shellcheck disable=SC1091
+  . "$REPO/.env"; set +a
+  SSH_HOST="${SSH_HOST:-}"
+  REMOTE_DIR="${REMOTE_DIR:-/opt/agent-dev}"
+  AGENT_DEV_HOME="${AGENT_DEV_HOME:-/srv/agent-dev}"
+  AGENT_DEV_SSH="${AGENT_DEV_SSH:-/srv/agent-dev-ssh}"
+  AGENT_DEV_IMAGE="${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}"
+  EXTRA_PACKAGES="${EXTRA_PACKAGES:-}"
+  PUID="${PUID:-1000}"; PGID="${PGID:-1000}"
+}
+
+# Compose file list: base + overlay chosen by mode.
+compose_files() {
+  local files=(-f compose.yml)
+  if [ -n "${AGENT_DEV_BUILD:-}" ]; then
+    files+=(-f compose.build.yml)
+  elif [ -n "${EXTRA_PACKAGES:-}" ]; then
+    files+=(-f compose.user.yml)
+  fi
+  printf '%s\n' "${files[@]}"
+}
+
+# Run `docker` on the host that owns the container (local or over SSH).
+host_docker() {
+  if [ -n "${SSH_HOST:-}" ]; then ssh "$SSH_HOST" docker "$@"; else docker "$@"; fi
+}
+
+# Run a command inside the container as root (image has no USER directive).
+dev_root() { host_docker exec -i -u root "$CONTAINER" "$@"; }
+# Run a command inside the container as the agent user.
+dev_agent() { host_docker exec -i -u "${PUID}:${PGID}" "$CONTAINER" "$@"; }
+
+confirm() {
+  local prompt="$1" default="${2:-n}" var
+  if [ -n "${NONINTERACTIVE:-}" ]; then [ "$default" = y ]; return; fi
+  local hint="[y/N]"; [ "$default" = y ] && hint="[Y/n]"
+  read -r -p "$prompt $hint " var
+  var="${var:-$default}"
+  [ "$var" = y ] || [ "$var" = Y ]
+}
+
+ask() {
+  local prompt="$1" default="$2" var
+  if [ -n "${NONINTERACTIVE:-}" ]; then printf '%s' "$default"; return; fi
+  read -r -p "$prompt [$default]: " var
+  printf '%s' "${var:-$default}"
+}
+
+cmd_init() {
+  [ -f "$REPO/.env" ] && ! confirm ".env exists — overwrite it?" n && die "aborted"
+  step "agent-dev setup wizard"
+  say  "Run this on the machine whose configs you want to migrate (your laptop)."
+  say  "Answers build .env and the container's SSH identity."
+
+  local ssh_host user uid gid home sshdir remote_dir tz
+  ssh_host="$(ask 'Docker host for the container: ssh alias/user@host (blank = local docker)' '')"
+  user="$(ask 'Container username (for your SSH config)' "$(id -un)")"
+  uid="$(ask 'PUID that should own the home volume' "$(id -u)")"
+  gid="$(ask 'PGID' "$(id -g)")"
+  home="$(ask 'Persistent home path' '/srv/agent-dev')"
+  sshdir="$(ask 'SSH identity dir (root-owned)' "${home}-ssh")"
+  remote_dir="$(ask 'Durable repo-sync dir on the docker host' '/opt/agent-dev')"
+  tz="$(ask 'Timezone' "$(cat /etc/timezone 2>/dev/null || echo UTC)")"
+  local gitname gitemail
+  gitname="$(ask 'Git user.name' "$(git config --global user.name 2>/dev/null || true)")"
+  gitemail="$(ask 'Git user.email' "$(git config --global user.email 2>/dev/null || true)")"
+
+  say ""
+  say "Harnesses (space-separated mise ids). Verified: claude codex opencode."
+  say "Gemini/Copilot install via npm: npm:@google/gemini-cli npm:@github/copilot"
+  local harnesses
+  harnesses="$(ask 'Harnesses' 'claude codex opencode')"
+  local cursor
+  confirm 'Include the Cursor Agent CLI (installs via cursor.com script)?' n && cursor=1 || cursor=0
+  local extras
+  extras="$(ask 'Extra apt packages (space-separated; builds a small overlay)' '')"
+
+  cat > "$REPO/.env" <<EOF
+SSH_HOST=$ssh_host
+REMOTE_DIR=$remote_dir
+AGENT_DEV_HOME=$home
+AGENT_DEV_SSH=$sshdir
+AGENT_DEV_IMAGE=${AGENT_DEV_IMAGE:-ghcr.io/aron/agent-dev:latest}
+PUID=$uid
+PGID=$gid
+TZ=$tz
+GIT_USER_NAME=$gitname
+GIT_USER_EMAIL=$gitemail
+HARNESSES=$harnesses
+CURSOR=$cursor
+TOOLS=herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp
+EXTRA_PACKAGES=$extras
+MEM_LIMIT=6g
+PIDS_LIMIT=2048
+EOF
+  ok "wrote .env"
+
+  # stash the container username in .env for ssh-config/machine-add
+  printf 'AGENT_USER=%s\n' "$user" >> "$REPO/.env"
+
+  AGENT_DEV_HOME="$home" AGENT_DEV_SSH="$sshdir" cmd_setup_ssh
+
+  say ""
+  step "Next"
+  say "  1. $0 up"
+  say "  2. $0 ssh-config   # add the block to ~/.ssh/config"
+  say "  3. $0 machine-add  # register with herdr (no manual ssh)"
+  say "  4. $0 migrate      # optional: bring host logins/config across"
+}
+
+cmd_setup_ssh() {
+  load_env
+  local host_cmd_local=true
+  [ -n "${SSH_HOST:-}" ] && host_cmd_local=false
+
+  step "SSH identity in $AGENT_DEV_SSH (root-owned; the only login path)"
+  local key="$AGENT_DEV_SSH/ssh_host_ed25519_key"
+  local ak="$AGENT_DEV_SSH/authorized_keys"
+
+  # Collect a public key to authorise. Default: the user's own ~/.ssh/*.pub.
+  local default_pub=""
+  for f in "$HOME"/.ssh/*.pub; do [ -f "$f" ] && { default_pub="$f"; break; }; done
+  local key_src
+  key_src="$(ask 'Public key to authorise (path, or blank to paste later)' "$default_pub")"
+
+  local script
+  script=$(cat <<'REMOTE'
+set -e
+d="$1"; key="$2"
+install -d -o root -g root -m 0755 "$d"
+if [ ! -e "$key" ]; then
+  ssh-keygen -t ed25519 -N "" -f "$key"
+fi
+: > "$d/authorized_keys"
+chown root:root "$d"/*
+chmod 0600 "$key"
+chmod 0644 "$d/ssh_host_ed25519_key.pub" "$d/authorized_keys"
+ssh-keygen -lf "$d/ssh_host_ed25519_key.pub"
+REMOTE
+)
+
+  if [ "$host_cmd_local" = true ]; then
+    bash -c "$script" _ "$AGENT_DEV_SSH" "$key"
+  else
+    ssh "$SSH_HOST" "bash -s" _ "$AGENT_DEV_SSH" "$key" <<<"$script"
+  fi
+  ok "host key created"
+
+  # Read public key(s) into authorized_keys (host side is simpler for local;
+  # for remote we stream them in the same way).
+  if [ -n "$key_src" ] && [ -f "$key_src" ]; then
+    local keys_content; keys_content="$(cat "$key_src")"
+    if [ "$host_cmd_local" = true ]; then
+      printf '%s\n' "$keys_content" > "$ak"
+    else
+      printf '%s\n' "$keys_content" | ssh "$SSH_HOST" "cat > '$ak'"
+    fi
+    # re-apply perms
+    if [ "$host_cmd_local" = true ]; then chmod 0644 "$ak"; else ssh "$SSH_HOST" "chmod 0644 '$ak'"; fi
+    ok "authorized key installed from $key_src"
+  else
+    warn "no public key installed — append lines to $AGENT_DEV_SSH/authorized_keys before machine-add"
+  fi
+}
+
+cmd_ssh_config() {
+  load_env
+  local jump="" user="${AGENT_USER:-$(id -un)}"
+  [ -n "${SSH_HOST:-}" ] && jump="ssh -T $SSH_HOST"
+  cat <<EOF
+# --- add to ~/.ssh/config (or ~/.ssh/config.d/homelab) ---
+Host $SSH_ALIAS
+  HostName agent-dev
+  User $user
+  RequestTTY auto
+  ProxyCommand ${jump:+$jump }docker exec -i -u root $CONTAINER /usr/sbin/sshd -i -e -f /etc/agent-dev/sshd_config
+# ---------------------------------------------------------
+EOF
+}
+
+cmd_machine_add() {
+  load_env
+  command -v herdr >/dev/null 2>&1 || die "herdr not on PATH (install: curl -fsSL https://herdr.dev/install.sh | sh)"
+  step "Registering container as herdr machine '$SSH_ALIAS'"
+  warn "first ensure the '$SSH_ALIAS' block from '$0 ssh-config' is in ~/.ssh/config"
+  herdr machine add "$SSH_ALIAS" --label "$SSH_ALIAS"
+}
+
+cmd_up() {
+  load_env
+  sync_repo
+  deploy
+}
+
+cmd_update() {
+  load_env
+  sync_repo
+  step "pulling newer base image"
+  deploy
+}
+
+# Sync the repo (minus .git/.env) to SSH_HOST:REMOTE_DIR, plus .env at 0600.
+sync_repo() {
+  [ -n "${SSH_HOST:-}" ] || return 0
+  step "syncing repo → $SSH_HOST:$REMOTE_DIR"
+  ssh "$SSH_HOST" "mkdir -p '$REMOTE_DIR'"
+  tar -C "$REPO" --exclude .git --exclude .env -czf - . \
+    | ssh "$SSH_HOST" "tar -xzf - -C '$REMOTE_DIR'"
+  scp -q "$REPO/.env" "$SSH_HOST:$REMOTE_DIR/.env"
+  ssh "$SSH_HOST" "chmod 600 '$REMOTE_DIR/.env'"
+}
+
+# Run `docker compose <files> <args>` locally or on SSH_HOST (where .env is synced).
+run_compose() {
+  local -a files; mapfile -t files < <(compose_files)
+  if [ -n "${SSH_HOST:-}" ]; then
+    local fa=""; local f; for f in "${files[@]}"; do fa+="$f "; done
+    ssh "$SSH_HOST" "cd '$REMOTE_DIR' && docker compose $fa$*"
+  else
+    docker compose "${files[@]}" "$@"
+  fi
+}
+
+deploy() {
+  if [ -n "${AGENT_DEV_BUILD:-}" ]; then
+    step "building base image locally (compose.build.yml)"
+    run_compose up -d --build
+  elif [ -n "${EXTRA_PACKAGES:-}" ]; then
+    step "building overlay with EXTRA_PACKAGES (compose.user.yml)"
+    run_compose build --pull
+    run_compose up -d
+  else
+    step "pulling ${AGENT_DEV_IMAGE}"
+    run_compose pull
+    run_compose up -d
+  fi
+  ok "running. First boot installs tools (a few minutes): $0 logs"
+}
+
+cmd_logs() { load_env; host_docker logs -f "$CONTAINER"; }
+
+cmd_shell() {
+  load_env
+  if [ "$#" -gt 0 ]; then
+    dev_agent bash -lc "$*"
+  else
+    [ -t 1 ] && host_docker exec -it -u "${PUID}:${PGID}" "$CONTAINER" bash -l \
+             || host_docker exec -i  -u "${PUID}:${PGID}" "$CONTAINER" bash -l
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# migrate: copy allowlisted host config + credentials into the persistent home.
+# Private SSH keys are never copied — only config/known_hosts and CLI tokens.
+# ---------------------------------------------------------------------------
+cmd_migrate() {
+  load_env
+  host_docker inspect "$CONTAINER" >/dev/null 2>&1 || die "container not running — run: $0 up"
+
+  step "Copy host config into the box (never private keys)"
+  say  "Reading from $HOME on THIS machine (your laptop), streaming into the container."
+  say  "${D}Everything copied is then readable by any agent in the box (bypass mode).${R}"
+
+  local do_git=0 do_ssh=0 do_cli=0 do_agent=0 do_dots=0 do_repos=0
+  if [ -n "${NONINTERACTIVE:-}" ] || [ "$#" -gt 0 ]; then
+    for a in "$@"; do case "$a" in
+      --git) do_git=1;; --ssh) do_ssh=1;; --cli) do_cli=1;; --agent) do_agent=1;;
+      --dotfiles) do_dots=1;; --repos) do_repos=1;; --all) do_git=1;do_ssh=1;do_cli=1;do_agent=1;do_dots=1;do_repos=1;;
+    esac; done
+  else
+    confirm 'Git identity + gitconfig (.gitconfig, config/git)?' y && do_git=1
+    confirm 'SSH client config + known_hosts (no private keys)?' y && do_ssh=1
+    confirm 'GitHub/GitLab CLI tokens (gh hosts.yml, glab config.yml)?' y && do_cli=1
+    confirm 'Agent auth (claude/codex/opencode login state)?' y && do_agent=1
+    confirm 'Shell config (.bashrc, mise config)?' n && do_dots=1
+    confirm 'Project checkouts from ~/projects?' n && do_repos=1
+  fi
+
+  local staging; staging="$(mktemp -d)"
+  trap 'rm -rf "$staging"' RETURN 2>/dev/null || true
+  mkdir -p "$staging"
+
+  copy_if() { # copy_if <host-path> <dest-rel>
+    local src="$1" dest="$2"
+    if [ -e "$src" ]; then
+      mkdir -p "$staging/$(dirname "$dest")"
+      if [ -d "$src" ]; then cp -r "$src" "$staging/$dest"; else cp "$src" "$staging/$dest"; fi
+      ok "  $src"
+    else
+      warn "  skip (missing): $src"
+    fi
+  }
+
+  # ~/.claude.json mixes login state with host-specific project history and
+  # trust entries (host paths mean nothing in the box). Ship only the login-
+  # relevant keys; they are merged into the box's file after extraction.
+  copy_claude_json() {
+    local src="$HOME/.claude.json"
+    [ -f "$src" ] || { warn "  skip (missing): $src"; return 0; }
+    jq '{oauthAccount, userID, hasCompletedOnboarding, theme} | with_entries(select(.value != null))' "$src" > "$staging/.claude.migrate.json" \
+      && ok "  $src (login keys only)"
+  }
+
+  [ "$do_git" = 1 ]     && { copy_if "$HOME/.gitconfig" .gitconfig; copy_if "$HOME/.config/git" .config/git; }
+  [ "$do_ssh" = 1 ]     && { copy_if "$HOME/.ssh/config" .ssh/config; copy_if "$HOME/.ssh/known_hosts" .ssh/known_hosts; }
+  [ "$do_cli" = 1 ]     && { copy_if "$HOME/.config/gh/hosts.yml" .config/gh/hosts.yml; copy_if "$HOME/.config/glab-cli/config.yml" .config/glab-cli/config.yml; }
+  [ "$do_agent" = 1 ]   && { copy_claude_json; copy_if "$HOME/.claude/.credentials.json" .claude/.credentials.json; copy_if "$HOME/.codex/auth.json" .codex/auth.json; copy_if "$HOME/.config/opencode/auth.json" .config/opencode/auth.json; }
+  [ "$do_dots" = 1 ]    && { copy_if "$HOME/.bashrc" .bashrc; copy_if "$HOME/.profile" .profile; copy_if "$HOME/.config/mise/config.toml" .config/mise/config.toml; }
+  if [ "$do_repos" = 1 ]; then
+    if [ -d "$HOME/projects" ]; then
+      mkdir -p "$staging/projects"
+      cp -r "$HOME/projects/." "$staging/projects/" && ok "  ~/projects"
+    else warn "  skip (missing): ~/projects"; fi
+  fi
+
+  # Never ship private keys even if someone added them by accident.
+  find "$staging" -type f \( -name 'id_*' -o -name '*.pem' -o -name '*.key' \) -delete 2>/dev/null || true
+
+  if [ -z "$(ls -A "$staging")" ]; then warn "nothing to copy"; return 0; fi
+
+  step "streaming into /home/agent"
+  if [ -n "${SSH_HOST:-}" ]; then
+    tar -C "$staging" -czf - . | ssh "$SSH_HOST" "docker exec -i $CONTAINER tar -xzf - -C /home/agent --no-same-owner"
+  else
+    tar -C "$staging" -czf - . | docker exec -i "$CONTAINER" tar -xzf - -C /home/agent --no-same-owner
+  fi
+  dev_root chown -R "${PUID}:${PGID}" /home/agent
+  # Script goes in via stdin: ssh would re-split quoted `bash -lc '...'` args.
+  if dev_agent bash -l -s <<'EOS'
+f="$HOME/.claude.json"; m="$HOME/.claude.migrate.json"
+[ -f "$m" ] || exit 1
+[ -f "$f" ] || echo "{}" > "$f"
+jq -s '.[0] * .[1]' "$f" "$m" > "$f.tmp" && mv "$f.tmp" "$f" && rm -f "$m"
+EOS
+  then ok "merged Claude login keys into the box's .claude.json"; fi
+  [ "$do_repos" = 1 ] && cmd_trust
+  ok "migrated. Git-over-HTTPS keeps working via the copied gh token."
+}
+
+# ---------------------------------------------------------------------------
+# gap: a missing tool inside the box needs the right lever.
+# ---------------------------------------------------------------------------
+cmd_gap() {
+  [ "$#" -ge 1 ] || die "usage: $0 gap <tool-or-package>"
+  local t="$1"
+  step "how to add '$t'"
+  case "$t" in
+    node|python|python3|go|rust|java|ruby|deno|bun|zig|clang|gcc|make|cmake|jq|yq|fd|rg|ripgrep|bat|fzf|lazygit|gh|glab|uv|helm|kubectl|terraform|tofu|hugo|age|sops)
+      say "mise backend available:"
+      say "  inside the box:  mise use -g $t@latest     # persists in the home volume"
+      ;;
+    claude|codex|opencode|gemini|copilot|pi|omp|aider|crush|cursor-agent)
+      say "harness — add to HARNESSES (or CURSOR=1) in .env, then:"
+      say "  $0 up"
+      ;;
+    ffmpeg|imagemagick|libpq-dev|postgresql-client|graphicsmagick|pandoc|texlive|gcc-*|lib*-dev)
+      say "system package — add an overlay layer:"
+      say "  add '$t' to EXTRA_PACKAGES in .env"
+      say "  $0 up        # builds a thin overlay on top of the published image"
+      ;;
+    npm:*|*)
+      say "try mise first (npm/pipx/cargo/go/ubi/aqua backends):"
+      say "  inside the box:  mise use -g npm:$t    # or pipx:$t / cargo:$t / ubi:owner/repo"
+      say "if it needs system libraries instead:"
+      say "  add '$t' to EXTRA_PACKAGES in .env && $0 up"
+      ;;
+  esac
+  say ""
+  say "${D}Rule: mise installs live into the persistent home; apt needs a rebuild.${R}"
+}
+
+cmd_doctor() {
+  load_env
+  step "agent-dev doctor"
+  host_docker inspect "$CONTAINER" >/dev/null 2>&1 && ok "container running" || { warn "container not running"; return 0; }
+  dev_root sshd -t -f /etc/agent-dev/sshd_config >/dev/null 2>&1 && ok "sshd config valid" || warn "sshd config invalid"
+  dev_agent bash -lc 'command -v herdr >/dev/null' && ok "herdr present" || warn "herdr missing (bootstrap still running? check logs)"
+  # --machine needs compatible herdr protocols on both ends.
+  local lp bp
+  lp="$(herdr status 2>/dev/null | awk '/^ *protocol:/{print $2; exit}')"
+  bp="$(dev_agent bash -lc 'herdr status' 2>/dev/null | awk '/^ *protocol:/{print $2; exit}')"
+  if [ -z "$lp" ] || [ -z "$bp" ]; then
+    warn "could not read herdr protocol (local: ${lp:-?}, box: ${bp:-?})"
+  elif [ "$lp" = "$bp" ]; then ok "herdr protocol $lp matches laptop and box"
+  else warn "herdr protocol differs (laptop $lp, box $bp) — align versions: mise up herdr on both, or pin TOOLS=\"herdr@<ver> …\""; fi
+  dev_agent bash -lc 'command -v mise >/dev/null && mise ls' 2>/dev/null | sed 's/^/    /' || true
+  dev_agent bash -lc 'test -w "$HOME" && echo writable' >/dev/null && ok "home writable" || warn "home not writable"
+}
+
+# trust: re-run the Claude trust pre-accept for every ~/projects/<name>.
+cmd_trust() {
+  load_env
+  step "Pre-accept Claude trust for ~/projects/*"
+  if dev_agent bash -l -s <<'EOS'
+f="$HOME/.claude.json"; [ -f "$f" ] || echo "{}" > "$f"
+for d in "$HOME/projects" "$HOME"/projects/*/; do
+  [ -d "$d" ] || continue
+  jq --arg p "${d%/}" '.projects[$p].hasTrustDialogAccepted = true' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+EOS
+  then ok "done"; else warn "failed"; fi
+}
+
+usage() {
+  awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
+}
+
+# ---------------------------------------------------------------------------
+main() {
+  local cmd="${1:-}"; shift || true
+  case "$cmd" in
+    init)         cmd_init "$@";;
+    setup-ssh)    cmd_setup_ssh "$@";;
+    up)           cmd_up "$@";;
+    update)       cmd_update "$@";;
+    migrate)      cmd_migrate "$@";;
+    ssh-config)   cmd_ssh_config "$@";;
+    machine-add)  cmd_machine_add "$@";;
+    gap)          cmd_gap "$@";;
+    doctor)       cmd_doctor "$@";;
+    trust)        cmd_trust "$@";;
+    shell|exec)   cmd_shell "$@";;
+    logs)         cmd_logs "$@";;
+    ""|-h|--help|help) usage;;
+    *)            die "unknown command: $cmd (try: $0 help)";;
+  esac
+}
+main "$@"

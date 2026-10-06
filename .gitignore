@@ -1,0 +1,5 @@
+.env
+ssh/
+*.tgz
+*.log
+.agent-dev-state/

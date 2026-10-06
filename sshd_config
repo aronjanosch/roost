@@ -1,0 +1,22 @@
+# Invoked on demand with `docker exec -i -u root ... sshd -i`; no TCP listener.
+# Dedicated host key and allowed public keys are supplied by a read-only mount.
+HostKey /etc/agent-dev/ssh/ssh_host_ed25519_key
+AuthorizedKeysFile /etc/agent-dev/ssh/authorized_keys
+AllowUsers agent
+PermitRootLogin no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+PermitEmptyPasswords no
+AllowTcpForwarding no
+X11Forwarding no
+PermitTunnel no
+PermitUserEnvironment no
+PermitUserRC no
+PrintMotd no
+UseDNS no
+# Non-interactive SSH commands do not read /etc/profile.d or interactive bashrc.
+SetEnv PATH=/home/agent/.local/share/mise/shims:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Subsystem sftp internal-sftp
