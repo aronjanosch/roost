@@ -205,7 +205,7 @@ cmd_ssh_config() {
   local jump="" user="${AGENT_USER:-$(id -un)}"
   [ -n "${SSH_HOST:-}" ] && jump="ssh -T $SSH_HOST"
   cat <<EOF
-# --- add to ~/.ssh/config (or ~/.ssh/config.d/homelab) ---
+# --- add to ~/.ssh/config (or a file under ~/.ssh/config.d/) ---
 Host $SSH_ALIAS
   HostName agent-dev
   User $user

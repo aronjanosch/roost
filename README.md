@@ -156,28 +156,16 @@ agent-dev/
 
 ## Publish (maintainers)
 
-Normal users pull a prebuilt image; they never build the base. To publish:
+Normal users pull a prebuilt image; they never build the base.
+`.github/workflows/image.yml` builds and pushes `ghcr.io/<owner>/agent-dev` on
+every push to `main`, on `v*` tags, and weekly (to pick up a fresh Ubuntu base).
+Forking the repo gives you the same pipeline; point your fork at its own image
+with `AGENT_DEV_IMAGE=ghcr.io/<you>/agent-dev:latest` in `.env`.
 
-```bash
-docker build -t ghcr.io/<you>/agent-dev:latest .
-docker push ghcr.io/<you>/agent-dev:latest
-```
-
-Then set `AGENT_DEV_IMAGE=ghcr.io/<you>/agent-dev:latest` in `.env`. A tiny CI
-job on tag push is enough:
-
-```yaml
-# .gitlab-ci.yml
-publish:
-  rules: [{ if: '$CI_COMMIT_TAG' }]
-  script:
-    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG" -t "$CI_REGISTRY_IMAGE:latest" .
-    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG"
-    - docker push "$CI_REGISTRY_IMAGE:latest"
-```
+To build by hand instead: `docker build -t ghcr.io/<you>/agent-dev:latest .`
 
 The image is architecture-specific (the Dockerfile fetches the `linux-x64` mise
-binary), so publish per-arch if you need arm64/NAS users.
+binary), so it is amd64 only for now.
 
 ## Security model
 
