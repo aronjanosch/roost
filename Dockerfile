@@ -26,7 +26,9 @@ RUN MISE_DATA_DIR=/tmp/mise mise exec node@lts -- npx -y playwright install-deps
 
 # Placeholder ids that entrypoint.sh remaps to PUID/PGID at start. No sudo on
 # purpose: the container is the containment boundary.
-RUN groupadd -g 1000 agent \
+# ubuntu:24.04 ships a default `ubuntu` user at 1000:1000; drop it first.
+RUN (userdel -r ubuntu 2>/dev/null; groupdel ubuntu 2>/dev/null; true) \
+    && groupadd -g 1000 agent \
     && useradd -u 1000 -g agent -m -s /bin/bash -p '*' agent
 
 COPY agent-instructions.md /etc/agent-dev/AGENTS.md
