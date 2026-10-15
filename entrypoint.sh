@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs as root. Remaps the agent uid/gid to PUID/PGID to match the host volume,
-# seeds the persistent home, bootstraps tools, then idles as the agent user.
+# seeds the persistent home, bootstraps tools, starts sshd, then idles as the
+# agent user.
 # Idempotent: safe to run on every container start.
 set -uo pipefail
 
@@ -105,5 +106,30 @@ bootstrap() {
 }
 
 bootstrap &
+
+# ---------------------------------------------------------------------------
+# 5. SSH, the only way in. Host key: generated once into the identity volume,
+#    so the fingerprint survives updates. Logins: PUBLIC_KEYS (rebuilt on every
+#    start, so removing a key there revokes it) plus the volume's
+#    authorized_keys (`roost add-key`). Both are root-owned and outside the
+#    agent's home, so agents cannot add logins. sshd stays root to drop
+#    privileges per login; only `agent` may log in.
+# ---------------------------------------------------------------------------
+SSH_DIR=/etc/roost/ssh
+key="$SSH_DIR/ssh_host_ed25519_key"
+if [ ! -s "$key" ]; then
+  install -d -o root -g root -m 0755 "$SSH_DIR" 2>/dev/null
+  ssh-keygen -q -t ed25519 -N "" -C roost -f "$key" \
+    && echo "roost: generated SSH host key $(ssh-keygen -lf "$key.pub" | cut -d' ' -f2)" \
+    || echo "WARN: cannot write $SSH_DIR (read-only mount?) — no host key, sshd not started"
+fi
+install -d -o root -g root -m 0755 /run/roost
+# Separated by newlines or commas (single-line UIs such as Unraid templates).
+printf '%s\n' "${PUBLIC_KEYS:-}" | tr ',' '\n' | sed 's/^[[:space:]]*//' | grep -E '^(ssh-|ecdsa-|sk-)' > /run/roost/authorized_keys
+chmod 0644 /run/roost/authorized_keys
+if [ ! -s /run/roost/authorized_keys ] && [ ! -s "$SSH_DIR/authorized_keys" ]; then
+  echo "WARN: no public keys — set PUBLIC_KEYS (newline- or comma-separated) or add $SSH_DIR/authorized_keys; nobody can log in yet"
+fi
+[ -s "$key" ] && /usr/sbin/sshd -D -e -f /etc/roost/sshd_config &
 
 exec gosu "$AGENT_USER" sleep infinity

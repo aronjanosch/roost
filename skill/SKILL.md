@@ -1,115 +1,136 @@
 ---
 name: roost-setup
-description: Set up, migrate, and operate a long-running headless coding-agent container ("roost") that runs herdr + Claude Code/Codex/opencode over a portless SSH transport and is reached with `herdr machine add`. Use when the user wants a persistent dev box for long agent tasks on a NAS/VM/homelab, wants to register it as a herdr machine rather than "ssh somewhere", wants to migrate logins/config/repos from their host into it, wants to authenticate gh/glab or a coding harness inside it, or hits a missing tool/package error in the container. Triggers: roost, herdr machine add, dev container for agents, long-running agent box, migrate host into container, "install X in the box", container package missing.
+description: Set up and operate roost, a long-running headless container for coding agents (herdr + Claude Code/Codex/opencode) on a NAS/VM, reached over its own SSH port. Use when the user wants to set up the box, connect another laptop or a phone/Termius to it, migrate logins/config into it, log in gh/glab or a harness inside it, add a missing tool or package, or update it.
 ---
 
-# roost setup skill
+# roost
 
-`roost` is a focused recipe: one long-running container that holds your
-coding agents, reached with `herdr machine add` (not a manual `ssh`), with no
-inbound ports, no sudo, and no Docker socket. Sessions keep running when your
-laptop sleeps. Plain `ssh roost` still works — it is the same transport,
-just not the everyday entry point.
+One container on a docker host (NAS/VM) holds the agents. Devices reach it as
+`ssh roost` / `herdr machine add roost`: the box's own sshd, published on
+`SSH_BIND:SSH_PORT` (default all interfaces, 2222), pubkey-only, user `agent`.
+No sudo, no Docker socket. Management commands (`up`, `join`, `add-key`,
+`migrate`) go through `ssh <docker-host> docker …`. Sessions keep running
+while laptops sleep.
 
-All host-side actions go through `./bin/roost` in the repo. Never invent
-commands; if a step is missing, say so rather than improvising.
+All host-side actions go through `./bin/roost` (`./bin/roost help` lists them).
+When a step has no command, say so instead of improvising one.
 
-**Run the CLI on the laptop, not on the Docker host.** `migrate` reads the
-local `$HOME`; `up` reads the local repo and pushes it to `REMOTE_DIR` on
-`SSH_HOST`. If the user runs it on the NAS, `migrate` sees the NAS's configs,
-not theirs.
+## Where state lives
 
-## Ground rules
+- **The box is the source of truth.** Paths and the uid come from
+  `docker inspect roost` on the docker host.
+- **`.env`** sits only on the *deploy device*, the one that ran `init` and runs
+  `up`/`update`. It is gitignored, so another clone has none.
+- **`~/.config/roost/host`** on every other device holds just `SSH_HOST`;
+  `roost join` writes it.
+- The SSH login user is always `agent`. Allowed keys: `PUBLIC_KEYS` in the
+  compose env (rebuilt on every start) plus `authorized_keys` in the root-owned
+  volume at `/etc/roost/ssh` (`roost add-key`). The container generates its
+  host key there on first start.
 
-- **Secrets:** everything copied into the box is readable by any agent running
-  there in bypass mode. Never copy SSH **private** keys, vault passphrases, or
-  production credentials. Only the allowlisted files in `roost migrate`.
-- **Auth is manual and interactive.** Do not try to script `claude`/`codex`/
-  `opencode`/`gh`/`glab` logins. Print the exact command and wait for the user.
-- **Never run `sudo` or `docker.sock` inside the box.** Fix missing tools with
-  mise (live) or `EXTRA_PACKAGES` + overlay build (human-gated).
-- **Never delete the home volume or `docker rmi` to "fix" an update.** Use
-  `./bin/roost update`; the home volume holds logins, repos and mise tools.
-- **Do not rebuild silently.** `up`/`update` recreate the container and stop
-  sessions; warn first.
+Run the CLI on the user's own laptop: `migrate` copies the *local* `$HOME`.
 
-## Flow A — first-time setup
+## Pick the branch
 
-1. Confirm prerequisites on the host: `docker` (or an `ssh` target that can run
-   docker), `git`, `mise` (optional but assumed), and `herdr`
-   (`curl -fsSL https://herdr.dev/install.sh | sh` if absent). Check with
-   `command -v docker herdr`.
-2. Run `./bin/roost init` and answer the wizard. It writes `.env` and
-   creates the container's host key + `authorized_keys` (defaults to the user's
-   first `~/.ssh/*.pub`). If the user has several keys, make sure the one they
-   will authenticate with is the one installed.
-3. `./bin/roost up` — builds and starts. First start installs harnesses and
-   tools into the home volume; watch `./bin/roost logs` until
-   `roost bootstrap done`.
-4. `./bin/roost ssh-config` → have the user add the printed block to
-   `~/.ssh/config` **or** `~/.ssh/config.d/<file>`.
-5. Test: `ssh roost 'id && command -v herdr && uname -s'`. Then
-   `./bin/roost machine-add` → `herdr machine status roost`.
-6. Authenticate inside the box, interactively, one at a time:
-   `./bin/roost shell` then `gh auth login`, `glab auth login`,
-   `claude` (first run logs in), `codex login`, `opencode auth login` as
-   applicable. The user chose **git over HTTPS via `gh`**, so `gh auth login`
-   plus `gh auth setup-git` is the important one.
-7. `./bin/roost doctor` for a final check.
+| The user wants to … | Branch |
+|---|---|
+| create the box for the first time | A — set up |
+| use an existing box from this (or another) laptop | B — join |
+| use it from Termius / a phone / an iPad | C — mobile |
+| bring logins, git identity, repos across | D — migrate |
+| install a missing tool or package | E — tools |
+| update the image, or runs the box from their own compose file | F — operate |
 
-## Flow B — migrate from the host
+## A — set up the box (deploy device, once)
 
-Use when the user says "bring my setup across" / "I don't want new keys".
+Two ways, same result. Without the CLI (user works on the docker host): copy
+`compose.yml`, put the laptop's public key in `.env` as `PUBLIC_KEYS="…"`,
+`docker compose up -d`, then continue at step 4. With the CLI:
 
-**Run this on the laptop**, so `$HOME` is theirs. If they are SSHed into the NAS,
-stop and have them run it locally — otherwise it copies the wrong configs.
+1. Prerequisites: `ssh <docker-host> docker ps` works (the ssh user can run
+   docker), and `herdr` is on the laptop
+   (`curl -fsSL https://herdr.dev/install.sh | sh`).
+2. `./bin/roost init`: the wizard writes `.env` including `PUBLIC_KEYS`. With
+   several keys in `~/.ssh` (or an agent like 1Password), confirm the one the
+   user's ssh actually offers to that host (`ssh -v <docker-host>`).
+3. `./bin/roost up`, then `./bin/roost logs` until `roost bootstrap done`.
+4. `./bin/roost ssh-config` → into `~/.ssh/config`; test `ssh roost id`.
+5. `./bin/roost machine-add`, then continue with step 6 of branch B.
 
-1. `./bin/roost migrate` (interactive) or with flags:
-   `--git --ssh --cli --agent --dotfiles --repos --all`.
-2. Explain what each group is first (see `docs/tools.md` and the README table).
-   Defaults: git identity **on**, SSH config + known_hosts **on** (no keys),
-   gh/glab tokens **on**, agent auth **on**, dotfiles/repos **off**.
-3. After it runs, verify: `./bin/roost shell 'gh auth status'` and
-   `git config --global user.email`. Git-over-HTTPS should just work.
-4. Reminder: the copied tokens are now readable by any agent in the box.
+Done when `./bin/roost doctor` is all `ok`.
 
-## Flow C — "I need tool X, it isn't in the container"
+## B — join a device
 
-This is the package-gap case. Three tiers, then act:
+On the new laptop, from a clone of the repo:
 
-1. `./bin/roost gap <name>` prints the correct tier.
-2. **mise by name** (most CLIs/runtimes): `./bin/roost shell 'mise use -g <name>'`.
-   Live, persists in the home volume.
-3. **mise by backend** — only if there is no plain name:
-   `mise use -g npm:<pkg>` / `pipx:<pkg>` / `cargo:<pkg>` / `ubi:<owner>/<repo>`.
-   Also live. `mise search <name>` to find the spec.
-4. **apt / system library**: edit `EXTRA_PACKAGES` in `.env`, then
-   `./bin/roost up`. This builds a thin `Dockerfile.user` overlay on the
-   published image and recreates the container — say that sessions stop.
-5. **A harness**: add its mise id to `HARNESSES` (or `CURSOR=1`), then `up`.
-   See `docs/harnesses.md`.
+1. `ssh <docker-host> docker ps` must work from *this* laptop first. A failure
+   here is the docker host's own ssh/key setup, outside roost.
+2. `./bin/roost join <docker-host>`: finds the container, saves the host,
+   appends this laptop's key, adds `Host roost` to `~/.ssh/config`, tests it
+   and offers `herdr machine add`.
+3. If it printed "could not write the box's authorized_keys" (identity volume
+   mounted read-only), add the printed key to `PUBLIC_KEYS`, recreate, re-run
+   `join`.
+4. Logins already in the box are shared; this laptop needs none of its own.
 
-## Flow E — updates
+Done when `ssh roost id` prints `agent` and `herdr machine status roost` is
+connected. A herdr protocol mismatch (`roost doctor`) means
+`mise up herdr` on both sides.
 
-To take a new base image: `./bin/roost update` (pulls + recreates). The
-home volume and the `EXTRA_PACKAGES` overlay are preserved. Never tell the user
-to `docker rmi` or delete the volume. Maintainers build the base with
-`ROOST_BUILD=1 ./bin/roost up`.
+## C — mobile (Termius, Heeler and other phone apps)
 
-## Flow D — pick / add harnesses
+A phone is just another key on the box's sshd:
 
-When the user asks "can it run X?":
+1. User exports the app's public key to a file (or pastes the line).
+2. `./bin/roost add-key <file.pub | 'ssh-ed25519 …'>` appends it to the box's
+   `authorized_keys`, live. Without the CLI: add it to `PUBLIC_KEYS`, recreate.
+3. In the app: host = the `HostName`, port = the `Port` from
+   `./bin/roost ssh-config`, user `agent`, that key. The phone must reach that
+   address (same LAN, or VPN/Tailscale). `herdr` attaches to the running
+   sessions; SFTP works.
 
-- Check `docs/harnesses.md` first, then `mise search <name>` inside the box.
-- For DeepSeek: it is a *model*, not a harness. Configure it as an
-  OpenAI-compatible provider inside opencode/Crush/etc.
-- To add: append to `HARNESSES` in `.env`, run `up`, then log in interactively.
+## D — migrate this laptop's setup
+
+1. Explain the groups before running (table in `docs/reference.md`): git, ssh config +
+   known_hosts, gh/glab tokens, agent logins on; dotfiles, `~/projects` off.
+   Private keys (`id_*`, `*.pem`, `*.key`) are always stripped.
+2. `./bin/roost migrate` (interactive) or with `--git --ssh --cli --agent
+   --dotfiles --repos --all`.
+3. Verify: `./bin/roost shell 'gh auth status && git config --global user.email'`
+   and a clone of a private repo. `migrate` runs `gh auth setup-git` in the box
+   (the copied `.gitconfig` points at the laptop's gh path); if it warned, run
+   it there by hand. glab: `glab auth login` with a token, then
+   `glab config set git_protocol https`; the box has no SSH key.
+4. Remind the user that copied tokens are readable by every agent in the box.
+
+Logins not migrated stay **interactive**: print the command and let the user run
+it in `./bin/roost shell` (`gh auth login && gh auth setup-git`, `claude`,
+`codex login`, `opencode auth login`).
+
+## E — a tool is missing
+
+`./bin/roost gap <name>` names the tier:
+
+- **mise** (by name, or `npm:`/`pipx:`/`cargo:`/`ubi:` backend):
+  `./bin/roost shell 'mise use -g <spec>'`. Live, persists in the home volume.
+- **apt / system library**: add to `EXTRA_PACKAGES` in `.env` on the deploy
+  device, then `./bin/roost up` (builds a thin overlay and recreates the box).
+- **harness**: add to `HARNESSES` (or `CURSOR=1`), then `up`.
+  `docs/harnesses.md` lists what is verified.
+
+## F — operate
+
+- `./bin/roost update` pulls a newer image and recreates; the home volume and
+  overlay survive.
+- Box run from the user's own compose project: `docker compose pull && docker
+  compose up -d` there. Every other branch works unchanged, because the CLI reads
+  the box via `docker inspect` and needs no `.env`.
 
 ## Guardrails
 
-- Stop and ask before anything that recreates the container or writes outside
-  the repo.
-- `roost migrate` must never include private keys — the script deletes
-  `id_*`, `*.pem`, `*.key` from the staging tree; do not defeat that.
-- If the user is on Unraid: `/root` is tmpfs, so keep `ROOST_HOME` under
-  `/mnt/user/appdata`; Unraid uid/gid is `99:100`.
+- `up`, `update` and compose recreates **stop running sessions**: warn and get a
+  yes first.
+- The home volume holds logins, repos and mise tools. Recover through `update`;
+  keep the volume and image in place.
+- Fix tools via mise or `EXTRA_PACKAGES`; the box has no sudo by design.
+- Only public keys go into the box or `authorized_keys`.

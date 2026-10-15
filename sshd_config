@@ -1,7 +1,9 @@
-# Invoked on demand with `docker exec -i -u root ... sshd -i`; no TCP listener.
-# Dedicated host key and allowed public keys are supplied by a read-only mount.
+# Started by the entrypoint, listening on 22 inside the container (published
+# as SSH_PORT). Host key and authorized_keys live in the identity volume;
+# /run/roost/authorized_keys is rebuilt from PUBLIC_KEYS on every start.
+Port 22
 HostKey /etc/roost/ssh/ssh_host_ed25519_key
-AuthorizedKeysFile /etc/roost/ssh/authorized_keys
+AuthorizedKeysFile /etc/roost/ssh/authorized_keys /run/roost/authorized_keys
 AllowUsers agent
 PermitRootLogin no
 PubkeyAuthentication yes

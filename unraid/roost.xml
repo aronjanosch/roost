@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>roost</Name>
+  <Repository>ghcr.io/aronjanosch/roost:latest</Repository>
+  <Registry>https://github.com/aronjanosch/roost/pkgs/container/roost</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/aronjanosch/roost/issues</Support>
+  <Project>https://github.com/aronjanosch/roost</Project>
+  <Overview>A home for your coding agents that never sleeps. Claude Code, Codex, opencode and friends run in this container and you drive them over SSH with herdr (herdr.dev): close the laptop and they keep working; reattach from another machine or your phone. Pubkey-only SSH as user agent, no sudo, no Docker socket. Paste your public key(s) into Public keys (comma-separated), then connect: ssh -p 2222 agent@[unraid-ip]. First start installs the tools (a few minutes, see the log).</Overview>
+  <Category>Tools: Productivity:</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/aronjanosch/roost/main/unraid/roost.xml</TemplateURL>
+  <Icon/>
+  <ExtraParams>--init --shm-size=1g --memory=6g --pids-limit=2048</ExtraParams>
+  <PostArgs/>
+  <Config Name="SSH port" Target="22" Default="2222" Mode="tcp" Description="Port your devices connect to (ssh -p 2222 agent@unraid). Keep it on LAN/VPN." Type="Port" Display="always" Required="true" Mask="false">2222</Config>
+  <Config Name="Public keys" Target="PUBLIC_KEYS" Default="" Mode="" Description="SSH public keys allowed to log in as agent, comma-separated (laptop, phone, ...)." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Home" Target="/home/agent" Default="/mnt/user/appdata/roost" Mode="rw" Description="Logins, repos and tools. Survives updates." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/roost</Config>
+  <Config Name="SSH identity" Target="/etc/roost/ssh" Default="/mnt/user/appdata/roost-ssh" Mode="rw" Description="Host key (generated on first start) and extra authorized_keys." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/roost-ssh</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User id that owns the home folder." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group id that owns the home folder." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="Timezone, e.g. Europe/Berlin." Type="Variable" Display="advanced" Required="false" Mask="false">UTC</Config>
+  <Config Name="Git user.name" Target="GIT_USER_NAME" Default="" Mode="" Description="Git identity for commits made in the box." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Git user.email" Target="GIT_USER_EMAIL" Default="" Mode="" Description="Git identity for commits made in the box." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Harnesses" Target="HARNESSES" Default="claude codex opencode" Mode="" Description="Coding agents to install (mise ids, space-separated)." Type="Variable" Display="advanced" Required="false" Mask="false">claude codex opencode</Config>
+  <Config Name="Tools" Target="TOOLS" Default="herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp" Mode="" Description="Extra tools (mise specs). herdr is required." Type="Variable" Display="advanced" Required="false" Mask="false">herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp</Config>
+</Container>

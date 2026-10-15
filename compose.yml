@@ -1,23 +1,27 @@
 # roost — a long-running, headless dev box for coding agents (herdr +
-# claude/codex/opencode/... + headless Chromium). No inbound ports, no Docker
-# socket, no sudo. You reach it with `herdr machine add` over an SSH stream
-# carried by `docker exec` (see bin/roost).
+# claude/codex/opencode/... + headless Chromium). One port: the box's own sshd
+# (pubkey-only, user `agent`). No Docker socket, no sudo.
 #
-# Default mode PULLS the published image — updates are fast and reproducible.
-#   ./bin/roost up        # pull + start
-#   ./bin/roost update    # pull newer image + recreate (home survives)
+# Standalone: set PUBLIC_KEYS (here or in .env), then
+#   docker compose up -d && docker logs -f roost   # until "roost bootstrap done"
+#   ssh -p 2222 agent@<docker-host>
+# Every ${VAR:-default} below can be set in a .env next to this file.
 #
-# Extra apt packages use an overlay instead of a build arg:
-#   ./bin/roost up        # auto-selects compose.user.yml when EXTRA_PACKAGES is set
-# Maintainers building the base image:
-#   ROOST_BUILD=1 ./bin/roost up   # uses compose.build.yml + Dockerfile
+# With the helper CLI (optional): ./bin/roost up / update / join / migrate.
+# Extra apt packages: set EXTRA_PACKAGES, `./bin/roost up` adds compose.user.yml.
+# Maintainers building the base image: ROOST_BUILD=1 ./bin/roost up
 services:
   roost:
     image: ${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}
     container_name: roost
     restart: unless-stopped
     init: true
+    ports:
+      # Bind to a LAN/Tailscale IP to keep it off other interfaces.
+      - "${SSH_BIND:-0.0.0.0}:${SSH_PORT:-2222}:22"
     environment:
+      # Who may log in: public keys, comma- or newline-separated.
+      - PUBLIC_KEYS=${PUBLIC_KEYS:-}
       - TZ=${TZ:-UTC}
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
@@ -30,14 +34,9 @@ services:
     volumes:
       # The only thing that must survive a recreate: logins, repos, mise tools.
       - ${ROOST_HOME:-/srv/roost}:/home/agent
-      # Root-owned host key (0600) and public authorized_keys (0644). Kept
-      # outside the agent-writable home so agents cannot change the login set.
-      - type: bind
-        source: ${ROOST_SSH:-/srv/roost-ssh}
-        target: /etc/roost/ssh
-        read_only: true
-        bind:
-          create_host_path: false
+      # SSH host key (generated on first start) and extra authorized_keys.
+      # Root-owned and outside the agent's home: agents cannot add logins.
+      - ${ROOST_SSH:-/srv/roost-ssh}:/etc/roost/ssh
     # Chromium/Electron crash with SIGBUS on the default 64 MB.
     shm_size: "1gb"
     # Keep a runaway agent from starving the rest of the host.
