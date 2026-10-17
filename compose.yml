@@ -2,14 +2,12 @@
 # claude/codex/opencode/... + headless Chromium). One port: the box's own sshd
 # (pubkey-only, user `agent`). No Docker socket, no sudo.
 #
-# Standalone: set PUBLIC_KEYS (here or in .env), then
+# Set PUBLIC_KEYS (here or in .env), then
 #   docker compose up -d && docker logs -f roost   # until "roost bootstrap done"
 #   ssh -p 2222 agent@<docker-host>
 # Every ${VAR:-default} below can be set in a .env next to this file.
-#
-# With the helper CLI (optional): ./bin/roost up / update / join / migrate.
-# Extra apt packages: set EXTRA_PACKAGES, `./bin/roost up` adds compose.user.yml.
-# Maintainers building the base image: ROOST_BUILD=1 ./bin/roost up
+# Update: docker compose pull && docker compose up -d (the home volume stays).
+# Extra apt packages: see compose.user.yml.
 services:
   roost:
     image: ${ROOST_IMAGE:-ghcr.io/aronjanosch/roost:latest}

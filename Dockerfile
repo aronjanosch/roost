@@ -32,11 +32,13 @@ RUN (userdel -r ubuntu 2>/dev/null; groupdel ubuntu 2>/dev/null; true) \
     && useradd -u 1000 -g agent -m -s /bin/bash -p '*' agent
 
 COPY agent-instructions.md /etc/roost/AGENTS.md
+COPY skills /etc/roost/skills
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY roost-trust /usr/local/bin/roost-trust
 COPY sshd_config /etc/roost/sshd_config
 
 # PATH for login shells (docker exec bash -l) + aliases for interactive ones.
-RUN chmod +x /usr/local/bin/entrypoint.sh \
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/roost-trust \
     && echo 'export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"' > /etc/profile.d/roost.sh \
     && printf '%s\n' \
       "eval \"\$(/usr/local/bin/mise activate bash)\"" \

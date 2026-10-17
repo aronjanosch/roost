@@ -1,6 +1,7 @@
-# Overlay: end-user apt packages on top of the published image.
-# Selected automatically by `./bin/roost up` when EXTRA_PACKAGES is set.
+# Overlay: extra apt packages on top of the published image.
+#   EXTRA_PACKAGES="ffmpeg libpq-dev" in .env, then
 #   docker compose -f compose.yml -f compose.user.yml up -d --build
+# Re-run the same command after pulling a new base image.
 services:
   roost:
     image: roost:custom

@@ -1,5 +1,6 @@
 # roost container
 
+- First run or something missing (logins, repos, tools, devices)? Use the `roost-setup` skill: a guided setup.
 - Private, long-running dev box for coding agents. Sessions keep running in herdr even when the client is closed, so long tasks survive your laptop sleeping.
 - `/home/agent` is persistent (logins, repos under `~/projects`, mise tools). One git worktree per task.
 - Tools come from mise. Update with `mise up`, not the tools' own updaters. System packages and the image are changed in the roost repo (Dockerfile / `EXTRA_PACKAGES`), then rebuilt -- not by hand in the container.

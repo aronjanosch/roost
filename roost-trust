@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# roost-trust — pre-accept Claude's folder-trust dialog for ~/projects and every
+# repo in it (Claude has no wildcard, so each one gets an entry). Runs on every
+# container start; run it by hand after cloning new repos.
+set -euo pipefail
+f="$HOME/.claude.json"
+[ -f "$f" ] || echo '{}' > "$f"
+dirs=("$HOME/projects")
+for d in "$HOME"/projects/*/; do [ -d "$d" ] && dirs+=("${d%/}"); done
+printf '%s\n' "${dirs[@]}" | jq -R . | jq -s . > "$f.trust"
+jq -S --slurpfile d "$f.trust" 'reduce $d[0][] as $p (.; .projects[$p].hasTrustDialogAccepted = true)' "$f" > "$f.tmp" \
+  && mv "$f.tmp" "$f"
+rm -f "$f.trust"

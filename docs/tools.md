@@ -17,26 +17,20 @@ a thin overlay on top of the published image.
 2. **mise by backend** — when there is no plain name:
    `mise use -g npm:<pkg>`, `pipx:<pkg>`, `cargo:<pkg>`, `ubi:<owner>/<repo>`,
    `aqua:<owner>/<repo>`. Tiers 1 and 2 are both live and persistent.
-3. **apt** — `EXTRA_PACKAGES` in `.env` + `./bin/roost up`. This builds
+3. **apt** — `EXTRA_PACKAGES` in `.env` + `docker compose -f compose.yml -f compose.user.yml up -d --build`. This builds
    `Dockerfile.user` (`FROM` the published image) as a small overlay, so it only
    re-runs that one layer on top of a new base.
 
 ## Updates
 
 ```bash
-./bin/roost update     # pull a newer published image + recreate
+docker compose pull && docker compose up -d     # pull a newer image + recreate
+docker compose -f compose.yml -f compose.user.yml up -d --build   # with an apt overlay
 ```
 
 The base image is pulled, never rebuilt, for normal users — so an update is
-fast and reproducible. Your overlay (`EXTRA_PACKAGES`) is re-applied
-automatically from `.env`; your home volume is untouched. Sessions stop while
-the container is recreated.
-
-Maintainers who want to build the base image from `Dockerfile` locally:
-
-```bash
-ROOST_BUILD=1 ./bin/roost up
-```
+fast and reproducible. Your home volume is untouched. Sessions stop while the
+container is recreated.
 
 ## Inside the box, live (mise)
 
@@ -47,17 +41,17 @@ mise use -g npm:some-cli
 mise up                        # update everything
 ```
 
-`./bin/roost gap <name>` prints the right command for a given tool.
+In the box, the `roost-setup` skill knows these tiers: ask your agent to
+install what a project needs.
 
 ## Image overlay (apt)
 
 ```bash
-./bin/roost gap ffmpeg     # tells you: add to EXTRA_PACKAGES
-# then edit .env:  EXTRA_PACKAGES="ffmpeg libpq-dev"
-./bin/roost up             # builds Dockerfile.user overlay + recreates
+# .env next to compose.yml:  EXTRA_PACKAGES="ffmpeg libpq-dev"
+docker compose -f compose.yml -f compose.user.yml up -d --build
 ```
 
-The overlay is re-applied on every `up`/`update`; the home volume (logins,
+Re-run that command after every pull to re-apply the overlay; the home volume (logins,
 repos, mise tools) survives. Sessions stop while the container is recreated.
 
 ## Default set

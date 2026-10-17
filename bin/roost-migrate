@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# roost-migrate — copy this laptop's config and logins into a roost box.
+#
+#   roost-migrate <ssh-target> [--git] [--ssh] [--cli] [--agent] [--dotfiles] [--repos] [--all]
+#
+# <ssh-target> is however you reach the box over ssh: an alias from
+# ~/.ssh/config, or agent@host (with the port in your ssh config). Without
+# flags it asks per group. Private keys are never copied.
+set -euo pipefail
+
+if [ -t 1 ]; then D=$'\033[2m'; R=$'\033[0m'; G=$'\033[32m'; Y=$'\033[33m'; else D=; R=; G=; Y=; fi
+ok()   { printf '%s  ok%s %s\n' "$G" "$R" "$*"; }
+warn() { printf '%s  !!%s %s\n' "$Y" "$R" "$*"; }
+die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+# confirm <question> <Y/n|y/N>: the capital letter is the default.
+confirm() { local v d=n; [ "${2%%/*}" = Y ] && d=y; read -r -p "$1 [$2] " v; v="${v:-$d}"; [ "$v" = y ] || [ "$v" = Y ]; }
+
+[ "$#" -ge 1 ] && [ "${1#-}" = "$1" ] || die "usage: $0 <ssh-target> [--git --ssh --cli --agent --dotfiles --repos --all]"
+T="$1"; shift
+ssh -o BatchMode=yes "$T" true 2>/dev/null || die "cannot ssh to '$T' without a prompt — check: ssh $T"
+
+git=0 sshc=0 cli=0 agent=0 dots=0 repos=0
+if [ "$#" -gt 0 ]; then
+  for a in "$@"; do case "$a" in
+    --git) git=1;; --ssh) sshc=1;; --cli) cli=1;; --agent) agent=1;;
+    --dotfiles) dots=1;; --repos) repos=1;;
+    --all) git=1 sshc=1 cli=1 agent=1 dots=1 repos=1;;
+    *) die "unknown flag: $a";;
+  esac; done
+else
+  echo "${D}Everything copied is readable by every agent in the box.${R}"
+  confirm 'Git identity + gitconfig?' Y/n && git=1
+  confirm 'SSH client config + known_hosts (no private keys)?' Y/n && sshc=1
+  confirm 'GitHub/GitLab CLI tokens?' Y/n && cli=1
+  confirm 'Agent logins (claude/codex/opencode)?' Y/n && agent=1
+  confirm 'Shell config (.bashrc, .profile, mise config)?' y/N && dots=1
+  confirm 'Project checkouts from ~/projects?' y/N && repos=1
+fi
+
+stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
+copy() { # copy <laptop-path> <path-in-home>
+  if [ -e "$1" ]; then mkdir -p "$stage/$(dirname "$2")"; cp -r "$1" "$stage/$2"; ok "$1"
+  else warn "skip (missing): $1"; fi
+}
+
+[ "$git" = 1 ]  && { copy ~/.gitconfig .gitconfig; copy ~/.config/git .config/git; }
+[ "$sshc" = 1 ] && { copy ~/.ssh/config .ssh/config; copy ~/.ssh/known_hosts .ssh/known_hosts; }
+[ "$cli" = 1 ]  && { copy ~/.config/gh/hosts.yml .config/gh/hosts.yml; copy ~/.config/glab-cli/config.yml .config/glab-cli/config.yml; }
+if [ "$agent" = 1 ]; then
+  # ~/.claude.json also holds this laptop's project history and trust entries;
+  # only the login keys go across, merged into the box's file below.
+  if [ -f ~/.claude.json ]; then
+    jq '{oauthAccount, userID, hasCompletedOnboarding, theme} | with_entries(select(.value != null))' ~/.claude.json > "$stage/.claude.migrate.json"
+    ok "$HOME/.claude.json (login keys only)"
+  fi
+  copy ~/.claude/.credentials.json .claude/.credentials.json
+  copy ~/.codex/auth.json .codex/auth.json
+  copy ~/.config/opencode/auth.json .config/opencode/auth.json
+fi
+[ "$dots" = 1 ]  && { copy ~/.bashrc .bashrc; copy ~/.profile .profile; copy ~/.config/mise/config.toml .config/mise/config.toml; }
+[ "$repos" = 1 ] && copy ~/projects projects
+
+# Never ship private keys, even if one slipped into a copied directory.
+find "$stage" -type f \( -name 'id_*' -o -name '*.pem' -o -name '*.key' \) ! -name '*.pub' -delete
+[ -n "$(ls -A "$stage")" ] || { warn "nothing to copy"; exit 0; }
+
+tar -C "$stage" -czf - . | ssh "$T" 'tar -xzf - -C "$HOME"'
+ok "copied into $T:~"
+
+if [ "$agent" = 1 ]; then
+  ssh "$T" 'f=~/.claude.json m=~/.claude.migrate.json; [ -f "$m" ] || exit 0
+    [ -f "$f" ] || echo "{}" > "$f"
+    jq -s ".[0] * .[1]" "$f" "$m" > "$f.tmp" && mv "$f.tmp" "$f" && rm "$m"' && ok "merged Claude login keys"
+fi
+# The copied .gitconfig points at this laptop's gh binary; rewire to the box's.
+if [ "$git" = 1 ] || [ "$cli" = 1 ]; then
+  ssh "$T" 'bash -lc "gh auth status >/dev/null 2>&1 && gh auth setup-git"' \
+    && ok "git uses the box's gh for HTTPS" \
+    || warn "gh not logged in in the box: ssh $T, then gh auth login && gh auth setup-git"
+fi
+[ "$repos" = 1 ] && ssh "$T" roost-trust && ok "trusted ~/projects/* for Claude"
+exit 0

@@ -1,6 +1,6 @@
 # End-user extension layer: adds apt packages on top of the published image.
-# Kept tiny so a new base image only re-runs this one layer. Select with
-# `./bin/roost up` when EXTRA_PACKAGES is set in .env.
+# Kept tiny so a new base image only re-runs this one layer. Used by
+# compose.user.yml.
 ARG ROOST_IMAGE=ghcr.io/aronjanosch/roost:latest
 FROM ${ROOST_IMAGE}
 

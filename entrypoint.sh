@@ -40,12 +40,18 @@ mkdir -p "$AGENT_HOME/projects" "$AGENT_HOME/.claude" "$AGENT_HOME/.codex" \
          "$AGENT_HOME/.config/opencode" "$AGENT_HOME/.local/bin"
 chown -R "$PUID:$PGID" "$AGENT_HOME" 2>/dev/null || true
 
-# Global agent instructions, managed by the image: overwritten on every start.
+# Global agent instructions and roost's skills (guided setup), managed by the
+# image: overwritten on every start. ~/.agents/skills is Codex's (and
+# opencode's) user skill folder, ~/.claude/skills Claude Code's.
 for f in .claude/CLAUDE.md .codex/AGENTS.md .config/opencode/AGENTS.md; do
   mkdir -p "$AGENT_HOME/$(dirname "$f")"
   cp /etc/roost/AGENTS.md "$AGENT_HOME/$f"
 done
-chown -R "$PUID:$PGID" "$AGENT_HOME/.claude" "$AGENT_HOME/.codex" "$AGENT_HOME/.config" 2>/dev/null || true
+for d in .claude/skills .agents/skills; do
+  mkdir -p "$AGENT_HOME/$d"
+  cp -r /etc/roost/skills/. "$AGENT_HOME/$d"/
+done
+chown -R "$PUID:$PGID" "$AGENT_HOME/.claude" "$AGENT_HOME/.codex" "$AGENT_HOME/.config" "$AGENT_HOME/.agents" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # 3. Git identity (as the agent user).
@@ -91,15 +97,9 @@ bootstrap() {
   run bash -c "jq -S '.mcpServers.playwright = {\"type\":\"stdio\",\"command\":\"playwright-mcp\",\"args\":[\"--headless\",\"--browser\",\"chromium\",\"--no-sandbox\"],\"env\":{}}' '$f' > '$f.tmp' && mv '$f.tmp' '$f'" \
     || echo "WARN: playwright MCP config failed"
 
-  # Pre-accept Claude's trust dialog per repo (it has no wildcard, so every
-  # ~/projects/<name> gets an entry; repos cloned later are picked up on the
-  # next container start or `roost trust`).
+  # Pre-accept Claude's trust dialog for ~/projects/*; later clones: roost-trust.
   if [ "$TRUST_PROJECTS" = "1" ]; then
-    run bash -c 'dirs=("$HOME/projects"); for d in "$HOME"/projects/*/; do [ -d "$d" ] && dirs+=("${d%/}"); done
-      printf "%s\n" "${dirs[@]}" | jq -R . | jq -s . > "$HOME/.trust.json"
-      jq -S --slurpfile d "$HOME/.trust.json" "reduce \$d[0][] as \$p (.; .projects[\$p].hasTrustDialogAccepted = true)" "$HOME/.claude.json" > "$HOME/.claude.json.tmp" \
-        && mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"; rm -f "$HOME/.trust.json"' \
-      || echo "WARN: trust pre-accept failed"
+    run roost-trust || echo "WARN: trust pre-accept failed"
   fi
 
   echo "roost bootstrap done"
@@ -111,7 +111,7 @@ bootstrap &
 # 5. SSH, the only way in. Host key: generated once into the identity volume,
 #    so the fingerprint survives updates. Logins: PUBLIC_KEYS (rebuilt on every
 #    start, so removing a key there revokes it) plus the volume's
-#    authorized_keys (`roost add-key`). Both are root-owned and outside the
+#    authorized_keys file. Both are root-owned and outside the
 #    agent's home, so agents cannot add logins. sshd stays root to drop
 #    privileges per login; only `agent` may log in.
 # ---------------------------------------------------------------------------

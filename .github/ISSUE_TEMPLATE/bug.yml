@@ -28,5 +28,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: "`docker logs roost` and, if you use the CLI, `./bin/roost doctor`. Remove tokens and keys."
+      description: "`docker logs roost`. Remove tokens and keys."
       render: text

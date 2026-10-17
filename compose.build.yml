@@ -1,8 +1,0 @@
-# Overlay: build the base image locally from Dockerfile (maintainers / dev only).
-#   ROOST_BUILD=1 ./bin/roost up
-services:
-  roost:
-    image: roost:dev
-    build:
-      context: .
-      dockerfile: Dockerfile

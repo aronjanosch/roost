@@ -17,19 +17,19 @@ binary), so it is amd64 only for now.
 
 ```
 roost/
-├── bin/roost            device-side control (all commands)
+├── bin/roost-migrate    laptop → box: copy config and logins over ssh
 ├── compose.yml          service definition (pulls the published image)
-├── compose.user.yml     overlay (auto-used when EXTRA_PACKAGES is set)
-├── compose.build.yml    overlay to build the base image locally (maintainers)
+├── compose.user.yml     overlay for EXTRA_PACKAGES (apt)
 ├── Dockerfile           base image: Ubuntu 24.04 + mise + Playwright deps
 ├── Dockerfile.user      end-user apt extension layer
-├── entrypoint.sh        uid/gid remap, home seed, tool bootstrap
+├── entrypoint.sh        uid/gid remap, home seed, tool bootstrap, sshd
+├── roost-trust          in the image: pre-accept Claude trust for ~/projects/*
 ├── sshd_config          the box's sshd (pubkey-only, user agent)
 ├── agent-instructions.md  global AGENTS.md/CLAUDE.md for agents in the box
 ├── docs/                reference, tools, harnesses, maintainers
-├── skill/SKILL.md       agent skill that drives setup/migration/gap-fixes
+├── skills/roost-setup/  guided setup skill, installed for every agent in the box
 ├── unraid/roost.xml     Unraid Community Apps template
 ├── .github/             image workflow, issue templates
 ├── CHANGELOG.md · CONTRIBUTING.md · SECURITY.md
-└── .env.example         copy to .env (or let `init` write it)
+└── .env.example         copy to .env next to compose.yml
 ```

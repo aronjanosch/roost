@@ -4,7 +4,7 @@
 
 **A home for your coding agents that never sleeps.**
 
-[install](#install) · [connect](#connect) · [phone](#from-your-phone) · [docs](docs/reference.md)
+[install](#install) · [connect](#connect) · [set up](#set-up-inside) · [docs](docs/reference.md)
 
 [![image](https://img.shields.io/github/actions/workflow/status/aronjanosch/roost/image.yml?label=image)](https://github.com/aronjanosch/roost/actions/workflows/image.yml)
 [![license](https://img.shields.io/github/license/aronjanosch/roost)](LICENSE)
@@ -34,21 +34,24 @@ On the docker host, in an empty folder:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/aronjanosch/roost/main/compose.yml
-echo 'PUBLIC_KEYS="ssh-ed25519 AAAA... my-laptop"' > .env   # your public key(s)
+cat > .env <<'EOF'
+PUBLIC_KEYS="ssh-ed25519 AAAA... laptop,ssh-ed25519 AAAA... phone"
+GIT_USER_NAME="Ada Lovelace"
+GIT_USER_EMAIL="ada@example.com"
+EOF
 docker compose up -d
 docker logs -f roost      # first start installs tools; wait for "roost bootstrap done"
 ```
 
-That's it. More keys: comma-separated in `PUBLIC_KEYS` (`"key1,key2"`), then
-`docker compose up -d`. Everything else is optional; see
-[.env.example](.env.example) (port, paths, uid, harnesses, extra packages).
-
-On Unraid, use uid/gid `99:100` and paths under `/mnt/user/appdata`.
+Only `PUBLIC_KEYS` is required. Everything else (port, paths, uid, harnesses,
+extra packages) is in [.env.example](.env.example). Change a value, then
+`docker compose up -d` again. On Unraid, use uid/gid `99:100` and paths under
+`/mnt/user/appdata`.
 
 ## Connect
 
 ```sshconfig
-# ~/.ssh/config
+# ~/.ssh/config: pick any alias
 Host roost
   HostName <docker-host>
   Port 2222
@@ -60,32 +63,33 @@ ssh roost                              # shell in the box
 herdr machine add roost --label roost  # sessions show up next to your local ones
 ```
 
-Log in once inside the box (`claude`, `codex login`, `gh auth login`, …), or
-bring your laptop's logins across with [`roost migrate`](#helper-cli).
+**From your phone:** any SSH app works (Termius, [Heeler](https://github.com/ZingerLittleBee/Heeler), …).
+Same host, port `2222`, user `agent`, the app's key in `PUBLIC_KEYS`. Run
+`herdr` to attach. Your phone needs to reach the host: same LAN, or a VPN
+such as Tailscale.
 
-## From your phone
+## Set up inside
 
-Any SSH app works: host = your docker host, port `2222`, user `agent`, and the
-app's key in `PUBLIC_KEYS`. Run `herdr` to attach to the running sessions.
-Your phone needs to reach the host: same LAN, or a VPN such as Tailscale.
+Start an agent in the box and ask it to **set up roost**. The built-in
+`roost-setup` skill walks you through what is still missing: git identity, `gh`
+login, agent logins, cloning your repos into `~/projects`, tools your projects
+need, and how to connect more devices.
 
-## Helper CLI
-
-Optional. `bin/roost` runs on your laptop and talks to the docker host over
-your existing SSH login.
+Already logged in on your laptop? Copy those logins across instead (never
+private keys):
 
 ```bash
-git clone https://github.com/aronjanosch/roost && cd roost
-./bin/roost join <docker-host>   # authorise this laptop, write ~/.ssh/config, add herdr machine
-./bin/roost add-key phone.pub    # authorise another key, no restart
-./bin/roost migrate              # copy git/gh/agent logins into the box (never private keys)
-./bin/roost gap <tool>           # how to install something missing
-./bin/roost doctor               # health checks
-./bin/roost help                 # all commands
+git clone https://github.com/aronjanosch/roost
+roost/bin/roost-migrate roost        # your ssh alias for the box; asks per group
 ```
 
-`./bin/roost init` + `up` set up the box from your laptop instead of copying
-`compose.yml` by hand.
+## Update
+
+```bash
+docker compose pull && docker compose up -d   # logins, repos and tools stay
+```
+
+Running agent sessions stop during the recreate.
 
 ## Docs
 
@@ -93,7 +97,7 @@ git clone https://github.com/aronjanosch/roost && cd roost
   versions, host notes, security model
 - [tools](docs/tools.md) · [harnesses](docs/harnesses.md)
 - [maintainers](docs/maintainers.md): image build, file layout
-- [skill/SKILL.md](skill/SKILL.md): agent skill that walks through all of this
+- [roost-setup skill](skills/roost-setup/SKILL.md): the guided setup agents run in the box
 
 ## Security
 

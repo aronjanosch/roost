@@ -52,5 +52,5 @@ harness is what you install here; the model lives in the harness config.
 
 1. Find the id: `mise search <name>` or `mise registry | grep -i <name>`.
 2. Add it to `HARNESSES` in `.env` (or `CURSOR=1` for Cursor).
-3. `./bin/roost up` — the entrypoint installs anything missing on the next
-   start, into the persistent home volume.
+3. `docker compose up -d` — the entrypoint installs anything missing on the
+   next start, into the persistent home volume.
