@@ -18,6 +18,8 @@ Built for [herdr](https://herdr.dev).
 
 </div>
 
+<p align="center"><img src="assets/demo/roost.gif" alt="Deploying roost with docker compose on a NAS, then ssh roost and herdr from the laptop" width="800"></p>
+
 roost is one Docker container for your NAS, homelab or VM. Claude Code, Codex,
 opencode and friends live in it, and you drive them from
 [herdr](https://herdr.dev). Close the laptop, and the agents keep working.
