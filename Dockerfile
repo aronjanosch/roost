@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Unpinned on purpose; tools themselves are updated inside with `mise up`.
 # TARGETARCH is set by buildx (amd64 / arm64); mise names them x64 / arm64.
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 RUN arch="$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)" \
     && curl -fsSL "https://mise.jdx.dev/mise-latest-linux-$arch" -o /usr/local/bin/mise \
     && chmod +x /usr/local/bin/mise
