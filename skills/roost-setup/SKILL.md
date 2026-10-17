@@ -30,7 +30,9 @@ with `git config --global`, and tell the user to add both vars to the box's
 ## 2. GitHub / GitLab
 
 - `gh auth status`. If not logged in: user runs `gh auth login` (HTTPS, web
-  device flow). Then you run `gh auth setup-git` so git uses gh for HTTPS.
+  device flow), then you run `gh auth setup-git` so git uses gh for HTTPS.
+  Alternative that survives a fresh home: a fine-grained token as `GH_TOKEN`
+  in the box's `.env`; the box logs gh in with it on every start.
 - GitLab only if the user uses it: `glab auth status`; else user runs
   `glab auth login`, then `glab config set git_protocol https`.
 - The box has no SSH key for git on purpose; HTTPS via gh/glab is the way.

@@ -25,6 +25,8 @@ services:
       - PGID=${PGID:-1000}
       - GIT_USER_NAME=${GIT_USER_NAME:-}
       - GIT_USER_EMAIL=${GIT_USER_EMAIL:-}
+      # Optional: logs gh in on start and wires git to it (HTTPS).
+      - GH_TOKEN=${GH_TOKEN:-}
       - HARNESSES=${HARNESSES:-claude codex opencode}
       - TOOLS=${TOOLS:-herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp}
       - CURSOR=${CURSOR:-0}

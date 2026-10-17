@@ -17,7 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Unpinned on purpose; tools themselves are updated inside with `mise up`.
-RUN curl -fsSL https://mise.jdx.dev/mise-latest-linux-x64 -o /usr/local/bin/mise \
+# TARGETARCH is set by buildx (amd64 / arm64); mise names them x64 / arm64.
+ARG TARGETARCH=amd64
+RUN arch="$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)" \
+    && curl -fsSL "https://mise.jdx.dev/mise-latest-linux-$arch" -o /usr/local/bin/mise \
     && chmod +x /usr/local/bin/mise
 
 # Throwaway node (Ubuntu's is too old for playwright) just for the system libs.

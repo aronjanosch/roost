@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>
+**roost**: a home for your coding agents that never sleeps. One container runs Claude Code, Codex, opencode and friends; you reach it over SSH and drive the sessions with [herdr](https://herdr.dev), from your laptop or your phone.
+
+Support: [GitHub issues](https://github.com/aronjanosch/roost/issues).
+  </Profile>
+  <WebPage>https://github.com/aronjanosch/roost</WebPage>
+</CommunityApplications>

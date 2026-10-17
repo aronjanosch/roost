@@ -9,9 +9,13 @@
   <Support>https://github.com/aronjanosch/roost/issues</Support>
   <Project>https://github.com/aronjanosch/roost</Project>
   <Overview>A home for your coding agents that never sleeps. Claude Code, Codex, opencode and friends run in this container and you drive them over SSH with herdr (herdr.dev): close the laptop and they keep working; reattach from another machine or your phone. Pubkey-only SSH as user agent, no sudo, no Docker socket. Paste your public key(s) into Public keys (comma-separated), then connect: ssh -p 2222 agent@[unraid-ip]. First start installs the tools (a few minutes, see the log).</Overview>
-  <Category>Tools: Productivity:</Category>
+  <ReadMe>https://raw.githubusercontent.com/aronjanosch/roost/main/README.md</ReadMe>
+  <Category>Productivity: Tools:System</Category>
+  <ExtraSearchTerms>claude codex opencode herdr ai agent coding ssh dev box</ExtraSearchTerms>
+  <Requires>An SSH key pair on the device you connect from. Internet access on first start (tools install into the home folder, a few minutes).</Requires>
+  <License>MIT</License>
   <WebUI/>
-  <TemplateURL>https://raw.githubusercontent.com/aronjanosch/roost/main/unraid/roost.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/aronjanosch/roost/main/templates/roost.xml</TemplateURL>
   <Icon/>
   <ExtraParams>--init --shm-size=1g --memory=6g --pids-limit=2048</ExtraParams>
   <PostArgs/>
@@ -24,6 +28,7 @@
   <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="Timezone, e.g. Europe/Berlin." Type="Variable" Display="advanced" Required="false" Mask="false">UTC</Config>
   <Config Name="Git user.name" Target="GIT_USER_NAME" Default="" Mode="" Description="Git identity for commits made in the box." Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Git user.email" Target="GIT_USER_EMAIL" Default="" Mode="" Description="Git identity for commits made in the box." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="GitHub token" Target="GH_TOKEN" Default="" Mode="" Description="Optional. Logs gh in on start and lets git use it for HTTPS. Fine-grained, only the repos you need." Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Harnesses" Target="HARNESSES" Default="claude codex opencode" Mode="" Description="Coding agents to install (mise ids, space-separated)." Type="Variable" Display="advanced" Required="false" Mask="false">claude codex opencode</Config>
   <Config Name="Tools" Target="TOOLS" Default="herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp" Mode="" Description="Extra tools (mise specs). herdr is required." Type="Variable" Display="advanced" Required="false" Mask="false">herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp</Config>
 </Container>

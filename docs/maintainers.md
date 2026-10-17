@@ -10,8 +10,8 @@ with `ROOST_IMAGE=ghcr.io/<you>/roost:latest` in `.env`.
 
 To build by hand instead: `docker build -t ghcr.io/<you>/roost:latest .`
 
-The image is architecture-specific (the Dockerfile fetches the `linux-x64` mise
-binary), so it is amd64 only for now.
+The image is built for `linux/amd64` and `linux/arm64` (Raspberry Pi 4/5, ARM
+NAS, Apple-silicon VMs); arm64 runs under QEMU in CI, so a build takes longer.
 
 ## Files
 
@@ -28,7 +28,7 @@ roost/
 ├── agent-instructions.md  global AGENTS.md/CLAUDE.md for agents in the box
 ├── docs/                reference, tools, harnesses, maintainers
 ├── skills/roost-setup/  guided setup skill, installed for every agent in the box
-├── unraid/roost.xml     Unraid Community Apps template
+├── templates/roost.xml  Unraid Community Apps template (+ ca_profile.xml)
 ├── .github/             image workflow, issue templates
 ├── CHANGELOG.md · CONTRIBUTING.md · SECURITY.md
 └── .env.example         copy to .env next to compose.yml
