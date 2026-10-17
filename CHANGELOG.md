@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (2026-10-17)
 
-roost is now a plain container: compose file, one port, your public key.
+First release. roost is a plain container: compose file, one port, your
+public key.
 
 - The box runs its own sshd on one published port (`SSH_PORT`, default 2222).
   Every SSH client connects directly as `agent`, phones included.
@@ -16,6 +17,10 @@ roost is now a plain container: compose file, one port, your public key.
   - The `roost-setup` skill is installed for Claude, Codex and opencode in the
     box: ask an agent to "set up roost" for a guided setup.
 - Extra apt packages: `docker compose -f compose.yml -f compose.user.yml up -d --build`.
+- `GH_TOKEN` logs gh in on start and wires git to it.
+- Starts in seconds: no more walking the whole home on every new container.
+- Images for linux/amd64 and linux/arm64.
+- Unraid Community Apps template (`templates/roost.xml`), logo and icon.
 
 Upgrading an existing box: add the `ports:` entry and `PUBLIC_KEYS` from
 `compose.yml`, then recreate. The SSH volume can stay as it is (also
