@@ -28,6 +28,7 @@ roost/
 ├── agent-instructions.md  global AGENTS.md/CLAUDE.md for agents in the box
 ├── docs/                reference, tools, harnesses, maintainers
 ├── skills/roost-setup/  guided setup skill, installed for every agent in the box
+├── assets/             logo (light/dark), icon.png (Unraid), og-card.png (social preview)
 ├── templates/roost.xml  Unraid Community Apps template (+ ca_profile.xml)
 ├── .github/             image workflow, issue templates
 ├── CHANGELOG.md · CONTRIBUTING.md · SECURITY.md

@@ -1,8 +1,14 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+  <img src="assets/logo.svg" alt="" width="96">
+</picture>
+
 # roost
 
-**A home for your coding agents that never sleeps.**
+**A home for your remote coding agents.**<br>
+Built for [herdr](https://herdr.dev).
 
 [install](#install) · [connect](#connect) · [set up](#set-up-inside) · [docs](docs/reference.md)
 
