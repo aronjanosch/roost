@@ -12,7 +12,9 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 UsePAM no
 PermitEmptyPasswords no
-AllowTcpForwarding no
+# local: OpenSSH gates forwarding to Unix sockets (direct-streamlocal) on this
+# too, and Heeler reaches herdr's socket that way. Remote forwarding stays off.
+AllowTcpForwarding local
 X11Forwarding no
 PermitTunnel no
 PermitUserEnvironment no

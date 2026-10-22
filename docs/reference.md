@@ -104,6 +104,8 @@ because sshd ignores `authorized_keys` under a group- or world-writable home.
   reads `~/.ssh/authorized_keys`, which agents can write: then agents can add
   logins. See [Heeler pairing](#heeler-pairing).
 - The sshd lets in only `agent`, by public key: no passwords, no root, no
-  port forwarding. Only the keys you install can log in.
+  remote port forwarding. Local forwarding is on, because Heeler reaches
+  herdr's socket through it; it reaches nothing a shell in the box could not.
+  Only the keys you install can log in.
 - Copied host credentials (gh/glab/agent auth) are sensitive: they are readable
   by any agent in the box. Rotate them if the box is ever compromised.

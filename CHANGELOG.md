@@ -6,6 +6,8 @@
   `roost-pair` in the box shows a Pairing Code to scan. Off by default; when
   on, `~/.ssh/authorized_keys` grants logins too. The plugin comes from a fork
   until ZingerLittleBee/Heeler#489 is merged.
+- sshd allows local forwarding (`AllowTcpForwarding local`). OpenSSH gates
+  forwarding to Unix sockets on it, so Heeler could not open herdr's socket.
 - The SSH host key is linked to `/etc/ssh`, where tools such as the Heeler
   plugin look for it.
 

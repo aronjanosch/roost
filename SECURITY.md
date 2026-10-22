@@ -6,7 +6,8 @@ roost runs coding agents with broad permissions inside one container. The
 container is the boundary:
 
 - no sudo, no Docker socket, no host mounts besides the home and SSH volumes
-- one sshd, pubkey-only, single user `agent`, no root login, no forwarding
+- one sshd, pubkey-only, single user `agent`, no root login, no remote
+  forwarding (local forwarding is on: Heeler reaches herdr's socket through it)
 - allowed keys and the host key are root-owned, outside the agent's home
   (unless you turn on `HEELER_PAIRING`: then `~/.ssh/authorized_keys`, which
   agents can write, grants logins too)
