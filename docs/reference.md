@@ -65,13 +65,44 @@ on your laptop and in the box (`ssh <box> herdr status`). If they differ, run
   `<ROOST_SSH>/authorized_keys` on the docker host (root-owned); changes there
   apply without a restart.
 
+## Heeler pairing
+
+[Heeler](https://github.com/ZingerLittleBee/Heeler) can add the box by
+scanning a QR code instead of copying its key into `PUBLIC_KEYS`. Off by
+default, because the Heeler plugin enrolls the phone's key into
+`~/.ssh/authorized_keys`, so that file has to grant logins, and every agent in
+the box can write it.
+
+1. Set `HEELER_PAIRING=1` and `HEELER_ADDRESSES` (`.env` or the Unraid
+   template, advanced view): the addresses the phone reaches the docker host
+   on, comma-separated, e.g. `192.168.1.10,100.101.102.103`. Inside the
+   container the plugin only sees the Docker address. The port is `SSH_PORT`
+   (Unraid: *Heeler port*, keep it equal to *SSH port*).
+2. Recreate the container (`docker compose up -d`).
+3. Log in from the laptop, start `herdr`, and run `roost-pair` in a pane. It
+   installs the Heeler plugin, writes its `pair.json` and opens the QR popup.
+4. Scan it in Heeler. The phone's key lands in `~/.ssh/authorized_keys`.
+
+The addresses come from `addresses` in the plugin's `pair.json`, which is not
+in upstream Heeler yet
+([ZingerLittleBee/Heeler#489](https://github.com/ZingerLittleBee/Heeler/pull/489)),
+so `roost-pair` installs the plugin from a fork for now. `HEELER_PLUGIN` and
+`HEELER_PLUGIN_REF` (in the box's shell) pick another source.
+
+Revoke a paired phone by deleting its line from `~/.ssh/authorized_keys`.
+Turning `HEELER_PAIRING` off and recreating stops that file from granting
+logins at all. With it on, `chmod go-w` is applied to the home on start,
+because sshd ignores `authorized_keys` under a group- or world-writable home.
+
 ## Security model
 
 - No sudo, no Docker socket in the container.
 - The SSH host key and `authorized_keys` live in a root-owned volume outside
   the agent-writable home, and `PUBLIC_KEYS` is written to a root-owned file
   in `/run`, so agents cannot change the login set. The host key is generated
-  on first start and kept across updates.
+  on first start and kept across updates. With `HEELER_PAIRING=1`, sshd also
+  reads `~/.ssh/authorized_keys`, which agents can write: then agents can add
+  logins. See [Heeler pairing](#heeler-pairing).
 - The sshd lets in only `agent`, by public key: no passwords, no root, no
   port forwarding. Only the keys you install can log in.
 - Copied host credentials (gh/glab/agent auth) are sensitive: they are readable

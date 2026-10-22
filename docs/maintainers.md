@@ -24,6 +24,7 @@ roost/
 ├── Dockerfile.user      end-user apt extension layer
 ├── entrypoint.sh        uid/gid remap, home seed, tool bootstrap, sshd
 ├── roost-trust          in the image: pre-accept Claude trust for ~/projects/*
+├── roost-pair           in the image: Heeler QR pairing (HEELER_PAIRING=1)
 ├── sshd_config          the box's sshd (pubkey-only, user agent)
 ├── agent-instructions.md  global AGENTS.md/CLAUDE.md for agents in the box
 ├── docs/                reference, tools, harnesses, maintainers

@@ -76,6 +76,11 @@ Same host, port `2222`, user `agent`, the app's key in `PUBLIC_KEYS`. Run
 `herdr` to attach. Your phone needs to reach the host: same LAN, or a VPN
 such as Tailscale.
 
+**Heeler by QR code:** set `HEELER_PAIRING=1` and
+`HEELER_ADDRESSES=<docker-host IP or name>`, recreate, then run `roost-pair`
+in herdr in the box and scan the code. This lets agents in the box add
+logins; see [Heeler pairing](docs/reference.md#heeler-pairing).
+
 ## Set up inside
 
 Start an agent in the box and ask it to **set up roost**. The built-in

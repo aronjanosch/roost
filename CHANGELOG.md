@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Heeler QR pairing: `HEELER_PAIRING=1` plus `HEELER_ADDRESSES`, then
+  `roost-pair` in the box shows a Pairing Code to scan. Off by default; when
+  on, `~/.ssh/authorized_keys` grants logins too. The plugin comes from a fork
+  until ZingerLittleBee/Heeler#489 is merged.
+- The SSH host key is linked to `/etc/ssh`, where tools such as the Heeler
+  plugin look for it.
+
 ## 0.1.0 (2026-10-17)
 
 First release. roost is a plain container: compose file, one port, your

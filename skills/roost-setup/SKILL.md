@@ -88,6 +88,11 @@ the user what to do on the docker host.
   agent`; then `herdr machine add <alias>`. The alias name is theirs to pick.
 - Phone (Heeler, Termius, …): same host, port and user, the app's key in
   `PUBLIC_KEYS`. Needs LAN or a VPN such as Tailscale to reach the host.
+- Heeler by QR code: works only when `/run/roost/heeler-pair.json` exists
+  (`HEELER_PAIRING=1`). Then the user runs `roost-pair` in a herdr pane and
+  scans the code. If the file is missing, tell them to set `HEELER_PAIRING=1`
+  and `HEELER_ADDRESSES` (the docker host's addresses the phone reaches) on the
+  container and recreate it; mention that agents can then add logins.
 - herdr versions must speak the same protocol on laptop and box: compare
   `herdr status` (protocol line) on both; `mise up herdr` aligns them.
 

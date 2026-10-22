@@ -31,6 +31,10 @@ services:
       - TOOLS=${TOOLS:-herdr uv gh glab npm:ccusage npm:playwright npm:@playwright/mcp}
       - CURSOR=${CURSOR:-0}
       - TRUST_PROJECTS=${TRUST_PROJECTS:-1}
+      # Heeler QR pairing (roost-pair): off by default, see docs/reference.md.
+      - HEELER_PAIRING=${HEELER_PAIRING:-0}
+      - HEELER_ADDRESSES=${HEELER_ADDRESSES:-}
+      - HEELER_PORT=${SSH_PORT:-2222}
     volumes:
       # The only thing that must survive a recreate: logins, repos, mise tools.
       - ${ROOST_HOME:-/srv/roost}:/home/agent

@@ -14,6 +14,9 @@ CURSOR="${CURSOR:-0}"
 # pre-accepted for ~/projects/*. Set TRUST_PROJECTS=0 to keep the dialog.
 TRUST_PROJECTS="${TRUST_PROJECTS:-1}"
 GH_TOKEN="${GH_TOKEN:-}"
+# Heeler QR pairing (roost-pair). Off by default: it lets ~/.ssh/authorized_keys
+# grant logins, which every agent in the box can write.
+HEELER_PAIRING="${HEELER_PAIRING:-0}"
 
 AGENT_USER=agent
 AGENT_HOME=/home/agent
@@ -144,6 +147,25 @@ chmod 0644 /run/roost/authorized_keys
 if [ ! -s /run/roost/authorized_keys ] && [ ! -s "$SSH_DIR/authorized_keys" ]; then
   echo "WARN: no public keys — set PUBLIC_KEYS (newline- or comma-separated) or add $SSH_DIR/authorized_keys; nobody can log in yet"
 fi
-[ -s "$key" ] && /usr/sbin/sshd -D -e -f /etc/roost/sshd_config &
+# The Heeler plugin pins the host key it finds under /etc/ssh.
+ln -sf "$key.pub" /etc/ssh/ssh_host_ed25519_key.pub
+
+# Heeler pairing: the plugin enrolls the phone's key into ~/.ssh/authorized_keys,
+# so sshd reads that file too (StrictModes wants the home not group/world
+# writable). Address and port for the Pairing Code go to roost-pair via
+# /run/roost/heeler-pair.json.
+sshd_config=/etc/roost/sshd_config
+rm -f /run/roost/heeler-pair.json
+if [ "$HEELER_PAIRING" = "1" ]; then
+  sshd_config=/run/roost/sshd_config
+  sed 's|^AuthorizedKeysFile .*|& .ssh/authorized_keys|' /etc/roost/sshd_config > "$sshd_config"
+  chmod go-w "$AGENT_HOME"
+  printf '%s\n' "${HEELER_ADDRESSES:-}" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | { grep -v '^$' || true; } \
+    | jq -R . | jq -s --argjson port "${HEELER_PORT:-2222}" '{ssh_port: $port, addresses: .}' > /run/roost/heeler-pair.json \
+    || echo "WARN: HEELER_PORT must be a number — roost-pair will not work"
+  chmod 0644 /run/roost/heeler-pair.json
+  echo "roost: Heeler pairing on — agents in the box can add logins via ~/.ssh/authorized_keys"
+fi
+[ -s "$key" ] && /usr/sbin/sshd -D -e -f "$sshd_config" &
 
 exec gosu "$AGENT_USER" sleep infinity

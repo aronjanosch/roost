@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# roost-pair — pair a phone with Heeler by scanning a QR code. Installs the
+# Heeler herdr plugin if missing, hands it the address and port the phone
+# reaches the box on (HEELER_ADDRESSES / HEELER_PORT), and opens the Pairing
+# Code popup in the running herdr. Needs HEELER_PAIRING=1 on the container.
+set -euo pipefail
+# addresses in pair.json is not upstream yet (ZingerLittleBee/Heeler#489).
+PLUGIN="${HEELER_PLUGIN:-aronjanosch/Heeler/plugin}"
+REF="${HEELER_PLUGIN_REF:-feat/pair-json-addresses}"
+cfg=/run/roost/heeler-pair.json
+
+if [ ! -f "$cfg" ]; then
+  echo "roost-pair: Heeler pairing is off. Set HEELER_PAIRING=1 (and HEELER_ADDRESSES) on the container and recreate it." >&2
+  exit 1
+fi
+if [ "$(jq '.addresses | length' "$cfg")" = 0 ]; then
+  echo "roost-pair: HEELER_ADDRESSES is empty; the code only offers the container's own addresses." >&2
+fi
+
+# (Re)install when the plugin is missing or comes from another source.
+installed="$(herdr plugin list --plugin heeler 2>/dev/null || true)"
+if ! grep -qF "[github:$PLUGIN@$REF]" <<<"$installed"; then
+  grep -q '^- heeler ' <<<"$installed" && herdr plugin uninstall heeler
+  herdr plugin install "$PLUGIN" --ref "$REF" --yes
+fi
+dir="$(herdr plugin config-dir heeler)"
+mkdir -p "$dir"
+cp "$cfg" "$dir/pair.json"
+echo "roost-pair: advertising $(jq -r '.addresses | join(", ")' "$cfg") on port $(jq .ssh_port "$cfg")"
+herdr plugin action invoke heeler.pair
